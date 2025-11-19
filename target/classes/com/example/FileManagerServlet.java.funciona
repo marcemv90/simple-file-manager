@@ -1,0 +1,187 @@
+package com.example;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+
+@WebServlet("/")
+public class FileManagerServlet extends HttpServlet {
+
+    private static final String DEFAULT_DIR = "/tmp";
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String contextPath = request.getContextPath() + "/";
+        String pathParam = request.getParameter("path");
+        String path = (pathParam == null || pathParam.isEmpty()) ? DEFAULT_DIR : pathParam;
+
+        File dir = new File(path);
+        File[] files = dir.listFiles();
+
+        response.setContentType("text/html");
+        PrintWriter out = response.getWriter();
+
+        out.println("<html>");
+        out.println("<head>");
+        out.println("<title>File Manager</title>");
+        // Include any additional stylesheets or scripts if needed
+	out.println("<link rel='stylesheet' type='text/css' href='styles/skeleton.css'>");
+        out.println("<style>");
+        out.println("    /* Remove text decoration for all links */");
+        out.println("    a:link, a:visited {");
+        out.println("        text-decoration: none;");
+        out.println("        color: inherit;");
+        out.println("    }");
+        out.println("    a.directory:hover {");
+        out.println("        font-weight: bold;");
+        out.println("        color: blue;");
+        out.println("    }");
+        out.println("    body {");
+        out.println("        font-size: 1em;");
+        out.println("    }");
+        out.println("</style>");
+        out.println("</head>");
+        out.println("<body>");
+        out.println("<h1 style='font-family: monospace'><a href='" + contextPath + "/'>Simple File Manager</a></h1>");
+        
+        // Upload form
+        out.println("<form id='uploadForm' action='upload' method='post' enctype='multipart/form-data' style='font-family: monospace'>");
+        out.println("   <div class='row'>");
+        out.println("       <div class='ten columns'>");
+	out.println("<p>Select file to upload to the current dir (Uploading an existing file will <strong>OVERWRITE</strong> the file in the server)</p>");
+        out.println("           <input type='file' id='fileInput' name='file' style='font-family: monospace;'>");
+        out.println("           <input type='submit' value='Upload' style='font-family: monospace;font-size:1em;'>");
+        out.println("       </div>");
+        out.println("   </div>");
+        out.println("   <div class='row'>");
+        out.println("       <div class='four columns'>");
+        out.println("           <input type='hidden' name='currentPath' value='" + path + "'>");
+        out.println("       </div>");
+        out.println("   </div>");
+        out.println("</form>");
+
+        // Include JavaScript for progress bar and displaying messages
+        out.println("<div id='progressContainer' style='display:none;'><progress id='progressBar' value='0' max='100'></progress><span>  </span><span id='progressText'></span></div>");
+        out.println("<div id='uploadStatus'></div>");
+
+        out.println("<script>");
+        out.println("document.getElementById('uploadForm').addEventListener('submit', function(event) {");
+        out.println("    event.preventDefault();");
+        out.println("    var fileInput = document.getElementById('fileInput');");
+        out.println("    var formData = new FormData();");
+        out.println("    formData.append('file', fileInput.files[0]);");
+        out.println("    formData.append('currentPath', document.querySelector('input[name=currentPath]').value);");
+        out.println("    var xhr = new XMLHttpRequest();");
+        out.println("    xhr.open('POST', 'upload', true);");
+        out.println("");
+        out.println("    document.getElementById('progressContainer').style.display = 'block';");
+        out.println("    xhr.upload.addEventListener('progress', function(e) {");
+        out.println("        if (e.lengthComputable) {");
+        out.println("            var percentComplete = (e.loaded / e.total) * 100;");
+        out.println("            document.getElementById('progressBar').value = percentComplete;");
+        out.println("            document.getElementById('progressText').innerText = Math.round(percentComplete) + '% uploaded, please do not refresh the page.';");
+        out.println("        }");
+        out.println("    });");
+        out.println("");
+        out.println("    xhr.onreadystatechange = function() {");
+        out.println("        if (xhr.readyState == XMLHttpRequest.DONE) {");
+        out.println("            document.getElementById('progressContainer').style.display = 'none';");
+        out.println("            var response = JSON.parse(xhr.responseText);");
+        out.println("            if (response.status === 'success') {");
+        out.println("                // Automatically refresh the file list after upload");
+        out.println("                window.location.reload();");
+        out.println("            } else {");
+        out.println("                document.getElementById('uploadStatus').innerHTML = ");
+        out.println("                    \"<p style='color: red;font-family: monospace'>Error: \" + response.message + \"</p>\";");
+        out.println("            }");
+        out.println("        }");
+        out.println("    };");
+        out.println("");
+        out.println("    xhr.send(formData);");
+        out.println("});");
+
+        //out.println("document.getElementById('deleteConfirmation').addEventListener('change', function() {");
+        //out.println("    var deleteLinks = document.querySelectorAll('.delete-link');");
+        //out.println("    deleteLinks.forEach(function(link) {");
+        //out.println("        link.style.display = this.checked ? 'inline' : 'none';");
+        //out.println("    }.bind(this));");
+        //out.println("});");
+        out.println("</script>");
+
+        // Directory path form
+        out.println("<form action='" + contextPath + "/' method='get' style='font-family: monospace'>");
+        out.println("   <div class='row'>");
+        out.println("       <div class='ten columns'>");
+        out.println("           <label for='path'>Enter directory path to explore:</label>");
+        out.println("           <input type='text' name='path' size='50' value='" + path + "' style='font-family: monospace;font-size:1em;'>");
+        out.println("           <input type='submit' value='Go' style='font-family: monospace;font-size:1em;'>");
+        out.println("       </div>");
+        out.println("   </div>");
+        out.println("</form>");
+
+        // Checkbox for delete confirmation
+        out.println("<form id='deleteForm' action='delete' method='post' style='font-family: monospace'>");
+        out.println("   <input type='checkbox' id='deleteConfirmation' name='deleteConfirmation'>");
+        out.println("   <label for='deleteConfirmation' style='font-weight: bold;color: red;'>&#x1F480; I know what I'm doing, and I'm going to delete things</label>");
+        out.println("</form>");
+
+
+        String[] parts = path.split("/");
+        StringBuilder currentPath = new StringBuilder();
+        out.println("<h2><code>");
+        
+            out.println("<a class='directory' href=\"" + contextPath + "?path=" + "/" + "\">" + "/" + "</a>");
+            for (int i = 0; i < parts.length; i++) {
+                if (i == 0 && parts[i].isEmpty()) { // Handle root "/"
+                    //currentPath.append("/");
+                    //out.println("<a href=\"/\">/</a>");
+                    //Nothing happens. I don't know how to negate the expression :/
+                } else {
+                    currentPath.append("/").append(parts[i]);
+                    out.println("<a class='directory' href=\"" + contextPath + "?path=" + currentPath.toString() + "\">" + parts[i] + "</a>");
+                }
+            
+                if (i > 0 && i < parts.length - 1) {
+                    out.println("/"); // Add separator between parts
+                }
+            }
+        
+        out.println("</code></h2>");
+//        out.println("<h2><code>" + path + "</code></h2>");
+        if (files != null && files.length > 0) {
+            out.println("<ul style='list-style-type:none;'>");
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    out.println("<li>&#128193;<a class='directory' href='" + contextPath + "?path=" + file.getPath() + "'><span style='font-family: monospace'>" + file.getName() + "</span></a></li>");
+                } else {
+                    out.println("<li>&#128196;<a title='download' href='" + contextPath + "/download?file=" + file.getPath() + "'>&#128190;</a><a class='delete-link' href='" + contextPath + "/delete?file=" + file.getPath() + "' style='display:none;text-decoration: none;' title='delete" + file.getPath() + "'>&#x274C;</a> | <a href='" + contextPath + "/view?file=" + file.getPath() + "'><span style='font-family: monospace'>" + file.getName() + "</span></a></li>");
+                }
+            }
+            out.println("</ul>");
+        } else {
+            out.println("<ul style='list-style-type:none;'>");
+            out.println("<li><pre>Path is empty or is not a directory</pre></li>");
+            out.println("</ul>");
+        }
+        out.println("<script>");
+        out.println("document.getElementById('deleteConfirmation').addEventListener('change', function() {");
+        out.println("    var deleteLinks = document.querySelectorAll('.delete-link');");
+        out.println("    deleteLinks.forEach(function(link) {");
+        out.println("        link.style.display = this.checked ? 'inline' : 'none';");
+        out.println("    }.bind(this));");
+        out.println("});");
+        out.println("</script>");
+        out.println("<script>");
+        out.println("    document.addEventListener('DOMContentLoaded', function() {");
+        out.println("        var checkbox = document.getElementById('deleteConfirmation');");
+        out.println("        checkbox.checked = false;");
+        out.println("    });");
+        out.println("</script>");
+        out.println("</body></html>");
+    }
+}

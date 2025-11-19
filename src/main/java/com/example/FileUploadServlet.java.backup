@@ -1,0 +1,47 @@
+package com.example;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Part;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+
+@WebServlet("/upload")
+@MultipartConfig
+public class FileUploadServlet extends HttpServlet {
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String currentPath = request.getParameter("currentPath");
+        Part filePart = request.getPart("file");
+        String fileName = filePart.getSubmittedFileName();
+        File file = new File(currentPath, fileName);
+
+        response.setContentType("text/html");
+        response.setCharacterEncoding("UTF-8");
+        PrintWriter out = response.getWriter();
+
+        // Save the file
+        try (InputStream inputStream = filePart.getInputStream();
+             FileOutputStream outputStream = new FileOutputStream(file)) {
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            out.println("<p style='color: green;font-family: monospace'>");
+	          out.println("File <strong>" + fileName + "</strong> uploaded successfully. Refresh the directory to see it listed.");
+            out.println("</p>");
+        } catch (IOException e) {
+            e.printStackTrace();
+            out.println("<p style='color: red;font-family: monospace'>Error uploading file: <strong>" + e.getMessage() + "</strong></p>");
+        }
+    }
+}

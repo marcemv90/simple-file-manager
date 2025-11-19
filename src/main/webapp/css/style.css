@@ -1,0 +1,125 @@
+/* Materialize CSS overrides and custom styles */
+body {
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    background-color: #f5f5f5;
+}
+
+main {
+    flex: 1 0 auto;
+    padding: 20px 0;
+}
+
+.nav-wrapper {
+    padding: 0 20px;
+}
+
+.breadcrumb {
+    font-size: 1.2rem;
+    padding: 10px 0;
+}
+
+.breadcrumb::before {
+    color: #757575;
+}
+
+.breadcrumb:last-child {
+    color: #000;
+}
+
+.card {
+    margin: 1rem 0;
+}
+
+.card .card-content {
+    padding: 10px 20px;
+}
+
+.file-item {
+    border-bottom: 1px solid #e0e0e0;
+    padding: 10px 0;
+    display: flex;
+    align-items: center;
+}
+
+.file-item:last-child {
+    border-bottom: none;
+}
+
+.file-icon {
+    margin-right: 15px;
+    font-size: 1.5rem;
+}
+
+.file-name {
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-actions {
+    margin-left: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.file-actions a {
+    color: #757575;
+    transition: color 0.3s;
+}
+
+.file-actions a:hover {
+    color: #2196f3;
+}
+
+.progress {
+    margin: 20px 0;
+    display: none;
+}
+
+#uploadStatus {
+    margin: 10px 0;
+}
+
+#fileInput {
+    display: none;
+}
+
+.file-field input[type=file] {
+    width: 100%;
+}
+
+.file-path-wrapper {
+    padding-left: 0;
+}
+
+/* Responsive adjustments */
+@media only screen and (max-width: 600px) {
+    .container {
+        width: 95%;
+    }
+    
+    .file-meta {
+        display: none;
+    }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

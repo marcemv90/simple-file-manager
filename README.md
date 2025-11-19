@@ -1,0 +1,20 @@
+# Simple File Manager
+
+## Build && Run
+
+Build the docker image with the latest code and run it by issuing the following command:
+```shell
+docker image build -t simple-file-manager . --no-cache && docker container run -p 9000:8080 --rm --name sfm -v .:/tmp/marce simple-file-manager
+```
+
+Then fire browser up and head to http://host:9000/sfm
+
+## Get the sfm.war file
+
+Make sure you have built the Docker image containing the war file you want to get. Then run the following command:
+
+```shell
+docker container run -p 9000:8080 --rm --name sfm -v ./out:/out simple-file-manager cp /usr/local/tomcat/webapps/sfm.war /out
+```
+
+That will leave the sfm.war file inside the ./out directory, in this folder.
