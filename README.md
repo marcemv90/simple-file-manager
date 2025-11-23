@@ -39,4 +39,4 @@ docker container run \
     cp /usr/local/tomcat/webapps/sfm.war /out
 ```
 
-That will leave thocker container run -p 9000:8080 --rm --name sfm -v ./out:/out simple-file-manager cp /usr/local/tomcat/webapps/sfm.war /oute sfm.war file inside the ./out directory, in this folder.
+That will leave the sfm.war file inside the ./out directory, in this folder.
