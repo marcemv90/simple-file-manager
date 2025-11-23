@@ -41,7 +41,7 @@ docker container run \
 
 That will leave the sfm.war file inside the ./out directory, in this folder.
 
-## Disclaimer
+# Disclaimer
 
 Simple File Manager was developed by a monkey with a shotgun (me). I am not a developer, and this webapp was built with the help of an AI agent. As a result, nothing in this software should be assumed to follow proper engineering practices, security standards, or production-grade quality.
 
