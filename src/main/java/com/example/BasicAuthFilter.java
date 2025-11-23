@@ -14,12 +14,22 @@ import jakarta.servlet.http.HttpServletResponse;
 public class BasicAuthFilter implements Filter {
     
     // Example credentials
-    private static final String USERNAME = "testadm";
-    private static final String PASSWORD = "ePMnSaD83TB7USxFz7EL";
+    private static final String USERNAME = initUsername();
+    private static final String PASSWORD = initPassword();
 
     @Override
     public void init(FilterConfig filterConfig) throws ServletException {
         // Initialization logic if needed
+    }
+
+    private static String initUsername() {
+        String envUser = System.getenv("BASIC_AUTH_USER");
+        return (envUser == null || envUser.isEmpty()) ? "admin" : envUser;
+    }
+
+    private static String initPassword() {
+        String envPass = System.getenv("BASIC_AUTH_PASSWORD");
+        return (envPass == null || envPass.isEmpty()) ? "123456" : envPass;
     }
 
     @Override
