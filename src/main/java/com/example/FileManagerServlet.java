@@ -363,11 +363,13 @@ public class FileManagerServlet extends HttpServlet {
         out.println("                startUpload(false);");
         out.println("            });");
         out.println("        }");
-        out.println("        // Handle \"Open Terminal\" button (xterm.js web terminal in new window)");
+        out.println("        // Handle \"Open Terminal\" button (xterm.js web terminal in new window, same directory)");
         out.println("        var openTerminalBtn = document.getElementById('openTerminalBtn');");
         out.println("        if (openTerminalBtn) {");
         out.println("            openTerminalBtn.addEventListener('click', function() {");
-        out.println("                var url = '" + contextPath + "terminal.html';");
+        out.println("                var currentPath = '" + path + "';");
+        out.println("                var baseUrl = '" + contextPath + "terminal.html';");
+        out.println("                var url = baseUrl + '?path=' + currentPath;");
         out.println("                window.open(url, 'noopener,noreferrer,width=1000,height=700');");
         out.println("            });");
         out.println("        }");

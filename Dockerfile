@@ -9,10 +9,10 @@ WORKDIR /app
 COPY . .
 
 # Download Maven dependencies
-RUN mvn dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline
 
 # Package the application
-RUN mvn clean package
+RUN --mount=type=cache,target=/root/.m2 mvn clean package
 
 # STAGE 2: DEPLOY
 # ----------------------------------------------------

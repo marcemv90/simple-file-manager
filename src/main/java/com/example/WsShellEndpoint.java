@@ -17,6 +17,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @ServerEndpoint("/ws-shell")
@@ -38,10 +39,21 @@ public class WsShellEndpoint {
             env.putIfAbsent("TERM", "xterm-256color");
             env.putIfAbsent("SHELL", "/bin/bash");
 
-            process = new PtyProcessBuilder()
+            PtyProcessBuilder builder = new PtyProcessBuilder()
                     .setCommand(cmd)
-                    .setEnvironment(env)
-                    .start();
+                    .setEnvironment(env);
+
+            // If a "cwd" parameter was provided on the WebSocket URL, start the PTY in that directory.
+            Map<String, List<String>> params = session.getRequestParameterMap();
+            List<String> cwdList = params != null ? params.get("cwd") : null;
+            if (cwdList != null && !cwdList.isEmpty()) {
+                String cwd = cwdList.get(0);
+                if (cwd != null && !cwd.isEmpty()) {
+                    builder.setDirectory(cwd);
+                }
+            }
+
+            process = builder.start();
             ptyOut = process.getInputStream();
             ptyIn = process.getOutputStream();
             running.set(true);

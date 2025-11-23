@@ -67,7 +67,13 @@
         const loc = window.location;
         const wsProtocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
         const basePath = loc.pathname.replace(/terminal\.html$/, '');
-        const wsUrl = wsProtocol + '//' + loc.host + basePath + 'ws-shell';
+        const params = new URLSearchParams(loc.search || '');
+        // Accept ?path=... from FileManager and treat it as the starting cwd
+        const cwdParam = params.get('path') || params.get('cwd');
+        let wsUrl = wsProtocol + '//' + loc.host + basePath + 'ws-shell';
+        if (cwdParam) {
+            wsUrl += '?cwd=' + encodeURIComponent(cwdParam);
+        }
 
         const socket = new WebSocket(wsUrl);
 

@@ -4,7 +4,7 @@
 
 Build the docker image with the latest code and run it by issuing the following command:
 ```shell
-docker image build -t simple-file-manager . --no-cache && docker container run -p 9000:8080 --rm --name sfm -v .:/tmp/marce simple-file-manager
+docker image build -t simple-file-manager . && docker container run -p 9000:8080 --rm --name sfm -v .:/tmp/marce simple-file-manager
 ```
 
 Then fire browser up and head to http://host:9000/sfm
