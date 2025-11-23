@@ -27,6 +27,29 @@ public class FileManagerServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         String contextPath = request.getContextPath() + "/";
+
+        // If the request is specifically for terminal.html, serve the static
+        // terminal page directly from the webapp resources to avoid recursive
+        // dispatch back into this servlet (which is mapped to "/").
+        String requestUri = request.getRequestURI();
+        if (requestUri != null && requestUri.endsWith("/terminal.html")) {
+            response.setContentType("text/html;charset=UTF-8");
+            try (java.io.InputStream in = getServletContext().getResourceAsStream("/terminal.html");
+                 java.io.OutputStream outStream = response.getOutputStream()) {
+                if (in == null) {
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                    return;
+                }
+                byte[] buffer = new byte[4096];
+                int len;
+                while ((len = in.read(buffer)) != -1) {
+                    outStream.write(buffer, 0, len);
+                }
+                outStream.flush();
+            }
+            return;
+        }
+
         String pathParam = request.getParameter("path");
         String path = (pathParam == null || pathParam.isEmpty()) ? DEFAULT_DIR : pathParam;
 
@@ -51,18 +74,23 @@ public class FileManagerServlet extends HttpServlet {
         out.println("    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css'>");
         out.println("    <!-- Custom CSS -->");
         out.println("    <link rel='stylesheet' href='/css/style.css'>");
+        out.println("    <style>");
+        out.println("        table.file-list-table { width: 100%; table-layout: fixed; font-size: 12px; }");
+        out.println("        table.file-list-table th, table.file-list-table td { padding: 2px 4px; line-height: 1.1; }");
+        out.println("        table.file-list-table tr { height: 18px; }");
+        out.println("    </style>");
         out.println("</head>");
         out.println("<body>");
         
         // Navigation Bar
         out.println("<nav class='light-blue darken-2'>");
         out.println("    <div class='nav-wrapper'>");
-        out.println("        <a href='" + contextPath + "/' class='brand-logo' style='padding-left: 20px;'>File Manager</a>");
+        out.println("        <a href='" + contextPath + "/' class='brand-logo' style='padding-left: 20px;'>Simple File Manager</a>");
         out.println("    </div>");
         out.println("</nav>");
         
-        // Main Content
-        out.println("<main class='container'>");
+        // Main Content (full-width container)
+        out.println("<main style='width: 100%; max-width: 100%; padding: 0 12px; box-sizing: border-box;'>");
         
         // Breadcrumb Navigation (no colored container, custom link colors)
         out.println("    <div style='margin: 10px 0;'>");
@@ -108,8 +136,8 @@ public class FileManagerServlet extends HttpServlet {
         out.println("            <button type='button' id='newFolderBtn' class='btn waves-effect waves-light grey darken-1' style='margin-left: 10px;'>");
         out.println("                <i class='material-icons left'>create_new_folder</i>New Folder");
         out.println("            </button>");
-        out.println("            <button type='button' id='runShellBtn' class='btn waves-effect waves-light red darken-1' style='margin-left: 10px;'>");
-        out.println("                <i class='material-icons left'>code</i>Run shell command");
+        out.println("            <button type='button' id='openTerminalBtn' class='btn waves-effect waves-light black' style='margin-left: 10px;'>");
+        out.println("                <i class='material-icons left'>terminal</i>Open Terminal");
         out.println("            </button>");
         out.println("        </form>");
         out.println("    </div>");
@@ -125,11 +153,11 @@ public class FileManagerServlet extends HttpServlet {
         out.println("    <hr style='margin: 20px 0;'>");
         
         // File List (no card container to allow full width)
-        out.println("    <div style='font-family: monospace;'>");
+        out.println("    <div style='font-family: monospace; padding-bottom: 24px;'>");
         out.println("        <span class='card-title'>Showing files in " + (path.isEmpty() ? "/" : path) + "</span>");
         
         if (files != null && files.length > 0) {
-            out.println("            <table class='highlight responsive-table'>");
+            out.println("            <table class='highlight responsive-table file-list-table'>");
             out.println("                <thead>");
             out.println("                    <tr>");
             out.println("                        <th>Permissions</th>");
@@ -167,9 +195,9 @@ public class FileManagerServlet extends HttpServlet {
                 
                 out.println("                        <td>");
                 if (file.isDirectory()) {
-                    out.println("                            <a href='" + contextPath + "?path=" + file.getPath() + "' class='truncate' title='" + file.getName() + "'>" + file.getName() + "</a>");
+                    out.println("                            <a href='" + contextPath + "?path=" + file.getPath() + "' class='truncate' title='" + file.getName() + "' style='color:#1976d2;'>" + file.getName() + "</a>");
                 } else {
-                    out.println("                            <span class='truncate' title='" + file.getName() + "'>" + file.getName() + "</span>");
+                    out.println("                            <a href='" + contextPath + "/view?file=" + file.getPath() + "' class='truncate' title='" + file.getName() + "' style='color:#000000;'>" + file.getName() + "</a>");
                 }
                 out.println("                        </td>");
                 
@@ -335,6 +363,14 @@ public class FileManagerServlet extends HttpServlet {
         out.println("                startUpload(false);");
         out.println("            });");
         out.println("        }");
+        out.println("        // Handle \"Open Terminal\" button (xterm.js web terminal in new window)");
+        out.println("        var openTerminalBtn = document.getElementById('openTerminalBtn');");
+        out.println("        if (openTerminalBtn) {");
+        out.println("            openTerminalBtn.addEventListener('click', function() {");
+        out.println("                var url = '" + contextPath + "terminal.html';");
+        out.println("                window.open(url, 'noopener,noreferrer,width=1000,height=700');");
+        out.println("            });");
+        out.println("        }");
         out.println("        ");
         out.println("        // Handle \"New Folder\" button");
         out.println("        var newFolderBtn = document.getElementById('newFolderBtn');");
@@ -372,56 +408,6 @@ public class FileManagerServlet extends HttpServlet {
         out.println("                    }).catch(function(error) {");
         out.println("                        console.error('Error creating directory:', error);");
         out.println("                        M.toast({html: 'Error creating directory.', classes: 'red'});");
-        out.println("                    });");
-        out.println("                });");
-        out.println("            });");
-        out.println("        }");
-        out.println("        // Handle \"Run shell command\" button");
-        out.println("        var runShellBtn = document.getElementById('runShellBtn');");
-        out.println("        if (runShellBtn) {");
-        out.println("            runShellBtn.addEventListener('click', function() {");
-        out.println("                Swal.fire({");
-        out.println("                    title: 'Run shell command',");
-        out.println("                    input: 'text',");
-        out.println("                    inputLabel: 'Command to execute',");
-        out.println("                    inputPlaceholder: 'e.g. ls -ltr',");
-        out.println("                    inputAttributes: { style: 'width: 80%; margin: 0 auto; text-align: center;' },");
-        out.println("                    showCancelButton: true,");
-        out.println("                    confirmButtonText: 'Run',");
-        out.println("                    cancelButtonText: 'Cancel',");
-        out.println("                    inputValidator: function(value) {");
-        out.println("                        if (!value || !value.trim()) { return 'Command must not be empty.'; }");
-        out.println("                        return null;");
-        out.println("                    }");
-        out.println("                }).then(function(result) {");
-        out.println("                    if (!result.isConfirmed) { return; }");
-        out.println("                    var cmd = result.value.trim();");
-        out.println("                    fetch('shell', {");
-        out.println("                        method: 'POST',");
-        out.println("                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },");
-        out.println("                        body: 'command=' + encodeURIComponent(cmd)");
-        out.println("                    }).then(function(response) { return response.json(); })");
-        out.println("                    .then(function(data) {");
-        out.println("                        var exitCode = (typeof data.exitCode !== 'undefined') ? data.exitCode : 'unknown';");
-        out.println("                        var output = data.output || '';");
-        out.println("                        Swal.fire({");
-        out.println("                            title: 'Command result',");
-        out.println("                            width: '100%',");
-        out.println("                            heightAuto: false,");
-        out.println("                            customClass: { popup: 'shell-output-popup' },");
-        out.println("                            showConfirmButton: true,");
-        out.println("                            confirmButtonText: 'Close',");
-        out.println("                            allowOutsideClick: true,");
-        out.println("                            html: '<div style=\\'width: 100%; height: calc(100vh - 140px); display: flex; flex-direction: column; box-sizing: border-box; padding: 8px;\\'>' +" );
-        out.println("                                  '<div style=\\'font-family: monospace; font-size: 14px; margin-bottom: 8px;\\'>Exit code: ' + exitCode + '</div>' +" );
-        out.println("                                  '<pre style=\\'flex: 1; margin: 0; padding: 8px; background:#111; color:#0f0; overflow-y: auto; overflow-x: auto; font-family: monospace; font-size: 12px; text-align: left;\\'>' +" );
-        out.println("                                  output.replace(/</g, '&lt;').replace(/>/g, '&gt;') +" );
-        out.println("                                  '</pre>' +" );
-        out.println("                                  '</div>'");
-        out.println("                        });");
-        out.println("                    }).catch(function(error) {");
-        out.println("                        console.error('Error executing command:', error);");
-        out.println("                        M.toast({html: 'Error executing command.', classes: 'red'});");
         out.println("                    });");
         out.println("                });");
         out.println("            });");
