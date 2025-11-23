@@ -13,7 +13,14 @@ Typical use cases include:
 
 Build the docker image with the latest code and run it by issuing the following command:
 ```shell
-docker image build -t simple-file-manager . && docker container run -p 9000:8080 --rm --name sfm -v .:/tmp/marce simple-file-manager
+docker image build -t simple-file-manager . && \
+docker container run \
+  -p 9000:8080 \
+  --rm \
+  --name sfm \
+  -v .:/tmp/myrepo \
+  simple-file-manager
+
 ```
 
 Then fire browser up and head to http://host:9000/sfm
@@ -23,7 +30,13 @@ Then fire browser up and head to http://host:9000/sfm
 Make sure you have built the Docker image containing the war file you want to get. Then run the following command:
 
 ```shell
-docker container run -p 9000:8080 --rm --name sfm -v ./out:/out simple-file-manager cp /usr/local/tomcat/webapps/sfm.war /out
+docker container run \
+    -p 9000:8080 \
+    --rm \
+    --name sfm \
+    -v ./out:/out \
+    simple-file-manager \
+    cp /usr/local/tomcat/webapps/sfm.war /out
 ```
 
-That will leave the sfm.war file inside the ./out directory, in this folder.
+That will leave thocker container run -p 9000:8080 --rm --name sfm -v ./out:/out simple-file-manager cp /usr/local/tomcat/webapps/sfm.war /oute sfm.war file inside the ./out directory, in this folder.
