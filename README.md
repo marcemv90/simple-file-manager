@@ -2,14 +2,14 @@
 
 Simple File Manager was created to address a practical need: deploying a lightweight file-management tool inside a Tomcat or WebLogic server. It provides a straightforward way to browse, access, and manage files belonging to an application running on the same application server, especially in environments where no other file-handling interfaces are available.
 
-Typical use cases include:
+## Use cases
 
-- Editing configuration files (e.g., application.properties, logback.xml, etc.)
+- Editing configuration files (e.g., `application.properties`, `logback.xml`)
 - Reviewing or downloading log files
 - Moving or renaming files and directories
 - Quickly inspecting generated artifacts or temporary files
 
-## Build && Run
+## Build & Run
 
 Build the docker image with the latest code and run it by issuing the following command:
 ```shell
@@ -23,7 +23,33 @@ docker container run \
 
 ```
 
-Then fire browser up and head to http://host:9000/sfm
+Then open your browser at `http://localhost:9000/sfm`.
+
+> Note: `-v .:/tmp/myrepo` mounts the current directory on the host into `/tmp/myrepo` inside the container.
+
+## Authentication
+
+Simple File Manager is protected with HTTP Basic Authentication.
+
+- **Default credentials** (if no environment variables are set):
+  - Username: `admin`
+  - Password: `123456`
+- **Environment variables** (take precedence over defaults):
+  - `BASIC_AUTH_USER`
+  - `BASIC_AUTH_PASSWORD`
+
+Example Docker run command overriding the default credentials:
+
+```shell
+docker container run \
+  -p 9000:8080 \
+  --rm \
+  --name sfm \
+  -v .:/tmp/myrepo \
+  -e BASIC_AUTH_USER=myuser \
+  -e BASIC_AUTH_PASSWORD=mypassword \
+  simple-file-manager
+```
 
 ## Get the sfm.war file
 
