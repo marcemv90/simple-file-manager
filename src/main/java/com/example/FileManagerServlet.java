@@ -55,10 +55,14 @@ public class FileManagerServlet extends HttpServlet {
 
         File dir = new File(path);
         File[] files = dir.listFiles();
+        String parentPath = "/";
+        if (path != null && !path.isEmpty() && !"/".equals(path)) {
+            File parentFile = dir.getParentFile();
+            if (parentFile != null) {
+                parentPath = parentFile.getPath();
+            }
+        }
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd_HH:mm");
-        // Define the format for each line: Adjust column widths as necessary
-        String format = "%-11s %-7s %-7s %-15s %-20s %s%n";
-
         response.setContentType("text/html;charset=UTF-8");
         PrintWriter out = response.getWriter();
 
@@ -75,9 +79,16 @@ public class FileManagerServlet extends HttpServlet {
         out.println("    <!-- Custom CSS -->");
         out.println("    <link rel='stylesheet' href='/css/style.css'>");
         out.println("    <style>");
-        out.println("        table.file-list-table { width: 100%; table-layout: fixed; font-size: 12px; }");
+        out.println("        table.file-list-table { width: 100%; border-collapse: collapse; font-size: 12px; }");
         out.println("        table.file-list-table th, table.file-list-table td { padding: 2px 4px; line-height: 1.1; }");
         out.println("        table.file-list-table tr { height: 18px; }");
+        out.println("        table.file-list-table th.col-perms, table.file-list-table td.col-perms,");
+        out.println("        table.file-list-table th.col-owner, table.file-list-table td.col-owner,");
+        out.println("        table.file-list-table th.col-group, table.file-list-table td.col-group,");
+        out.println("        table.file-list-table th.col-size, table.file-list-table td.col-size,");
+        out.println("        table.file-list-table th.col-actions, table.file-list-table td.col-actions { white-space: nowrap; }");
+        out.println("        table.file-list-table th.col-modified, table.file-list-table td.col-modified { text-align: center; }");
+        out.println("        table.file-list-table th.col-name, table.file-list-table td.col-name { width: 50%; }");
         out.println("    </style>");
         out.println("</head>");
         out.println("<body>");
@@ -155,23 +166,45 @@ public class FileManagerServlet extends HttpServlet {
         // File List (no card container to allow full width)
         out.println("    <div style='font-family: monospace; padding-bottom: 24px;'>");
         out.println("        <span class='card-title'>Showing files in " + (path.isEmpty() ? "/" : path) + "</span>");
-        
+        out.println("        <br/>");
+        out.println("        <br/>");
+
         if (files != null && files.length > 0) {
             out.println("            <table class='highlight responsive-table file-list-table'>");
             out.println("                <thead>");
             out.println("                    <tr>");
-            out.println("                        <th>Permissions</th>");
-            out.println("                        <th>Owner</th>");
-            out.println("                        <th>Group</th>");
-            out.println("                        <th class='right-align'>Size</th>");
-            out.println("                        <th>Modified</th>");
-            out.println("                        <th>Name</th>");
-            out.println("                        <th class='right-align'>Actions</th>");
+            out.println("                        <th class='col-perms'>Permissions</th>");
+            out.println("                        <th class='col-owner'>Owner</th>");
+            out.println("                        <th class='col-group'>Group</th>");
+            out.println("                        <th class='right-align col-size'>Size</th>");
+            out.println("                        <th class='col-modified'>Modified</th>");
+            out.println("                        <th class='col-name'>Name</th>");
+            out.println("                        <th class='right-align col-actions'>Actions</th>");
             out.println("                    </tr>");
             out.println("                </thead>");
             out.println("                <tbody>");
             int rowIndex = 0;
-            
+            // If not at root, insert a first row that goes to the parent folder ("..")
+            if (!(path == null || path.isEmpty() || "/".equals(path))) {
+                String parentRowStyle = (rowIndex % 2 == 0) ? " style='background-color: #f5f5f5;'" : "";
+                out.println("                    <tr" + parentRowStyle + ">");
+                out.println("                        <td class='col-perms'>&nbsp;</td>");
+                out.println("                        <td class='col-owner'>&nbsp;</td>");
+                out.println("                        <td class='col-group'>&nbsp;</td>");
+                out.println("                        <td class='right-align col-size'>&nbsp;</td>");
+                out.println("                        <td class='col-modified'>&nbsp;</td>");
+                out.println("                        <td class='col-name'>");
+                out.println("                            <a href='" + contextPath + "?path=" + parentPath + "' class='truncate' title='Parent folder' style='color:#1976d2;'>.. (parent folder)</a>");
+                out.println("                        </td>");
+                out.println("                        <td class='right-align col-actions'>");
+                out.println("                            <button class='btn waves-effect waves-light light-blue' style='visibility:hidden;' disabled>");
+                out.println("                                <i class='material-icons'>more_vert</i>");
+                out.println("                            </button>");
+                out.println("                        </td>");
+                out.println("                    </tr>");
+                rowIndex++;
+            }
+
             for (File file : files) {
                 Path filePath = file.toPath();
                 BasicFileAttributes attrs = Files.readAttributes(filePath, BasicFileAttributes.class);
@@ -187,13 +220,13 @@ public class FileManagerServlet extends HttpServlet {
                 
                 String rowStyle = (rowIndex % 2 == 0) ? " style='background-color: #f5f5f5;'" : "";
                 out.println("                    <tr" + rowStyle + ">");
-                out.println("                        <td><code>" + permissions + "</code></td>");
-                out.println("                        <td>" + owner.getName() + "</td>");
-                out.println("                        <td>" + group + "</td>");
-                out.println("                        <td class='right-align'>" + String.format("%,d", size) + "</td>");
-                out.println("                        <td>" + formattedDate + "</td>");
+                out.println("                        <td class='col-perms'><code>" + permissions + "</code></td>");
+                out.println("                        <td class='col-owner'>" + owner.getName() + "</td>");
+                out.println("                        <td class='col-group'>" + group + "</td>");
+                out.println("                        <td class='right-align col-size'>" + String.format("%,d", size) + "</td>");
+                out.println("                        <td class='col-modified'>" + formattedDate + "</td>");
                 
-                out.println("                        <td>");
+                out.println("                        <td class='col-name'>");
                 if (file.isDirectory()) {
                     out.println("                            <a href='" + contextPath + "?path=" + file.getPath() + "' class='truncate' title='" + file.getName() + "' style='color:#1976d2;'>" + file.getName() + "</a>");
                 } else {
@@ -201,7 +234,7 @@ public class FileManagerServlet extends HttpServlet {
                 }
                 out.println("                        </td>");
                 
-                out.println("                        <td class='right-align'>");
+                out.println("                        <td class='right-align col-actions'>");
                 String deleteType = file.isDirectory() ? "directory" : "file";
                 String dropdownId = "actions-" + rowIndex;
                 out.println("                            <a class='dropdown-trigger btn waves-effect waves-light light-blue' href='#!' data-target='" + dropdownId + "' title='Actions'>");
@@ -564,14 +597,6 @@ public class FileManagerServlet extends HttpServlet {
         out.println("</script>");
         out.println("</body>");
         out.println("</html>");
-    }
-
-    // Format file size for display
-    private String formatFileSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        int exp = (int) (Math.log(bytes) / Math.log(1024));
-        char pre = "KMGTPE".charAt(exp-1);
-        return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
     }
 
     // Method to convert Set<PosixFilePermission> to Unix-style permission string (rwx bits only)
