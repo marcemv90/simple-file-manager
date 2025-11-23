@@ -1,5 +1,14 @@
 # Simple File Manager
 
+Simple File Manager was created to address a practical need: deploying a lightweight file-management tool inside a Tomcat or WebLogic server. It provides a straightforward way to browse, access, and manage files belonging to an application running on the same application server, especially in environments where no other file-handling interfaces are available.
+
+Typical use cases include:
+
+- Editing configuration files (e.g., application.properties, logback.xml, etc.)
+- Reviewing or downloading log files
+- Moving or renaming files and directories
+- Quickly inspecting generated artifacts or temporary files
+
 ## Build && Run
 
 Build the docker image with the latest code and run it by issuing the following command:
