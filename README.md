@@ -9,6 +9,12 @@ Simple File Manager was created to address a practical need: deploying a lightwe
 - Moving or renaming files and directories
 - Quickly inspecting generated artifacts or temporary files
 
+## Screenshots
+
+![Simple File Manager - file list](img/screenshot-01.png)
+
+![Simple File Manager - file editor](img/screenshot-02.png)
+
 ## Build & Run
 
 Build the docker image with the latest code and run it by issuing the following command:
