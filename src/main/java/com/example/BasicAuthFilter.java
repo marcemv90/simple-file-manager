@@ -13,9 +13,9 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public class BasicAuthFilter implements Filter {
     
-    // Example credentials
     private static final String USERNAME = initUsername();
     private static final String PASSWORD = initPassword();
+    private static final boolean AUTH_ENABLED = isAuthEnabled();
 
     @Override
     public void init(FilterConfig filterConfig) throws ServletException {
@@ -24,17 +24,26 @@ public class BasicAuthFilter implements Filter {
 
     private static String initUsername() {
         String envUser = System.getenv("BASIC_AUTH_USER");
-        return (envUser == null || envUser.isEmpty()) ? "admin" : envUser;
+        return (envUser == null || envUser.isEmpty()) ? null : envUser;
     }
 
     private static String initPassword() {
         String envPass = System.getenv("BASIC_AUTH_PASSWORD");
-        return (envPass == null || envPass.isEmpty()) ? "123456" : envPass;
+        return (envPass == null || envPass.isEmpty()) ? null : envPass;
+    }
+
+    private static boolean isAuthEnabled() {
+        return USERNAME != null && PASSWORD != null;
     }
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
+        if (!AUTH_ENABLED) {
+            // Basic Auth not configured; allow all requests through
+            chain.doFilter(request, response);
+            return;
+        }
 
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;

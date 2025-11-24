@@ -29,16 +29,14 @@ Then open your browser at `http://localhost:9000/sfm`.
 
 ## Authentication
 
-Simple File Manager is protected with HTTP Basic Authentication.
+Simple File Manager can be protected with HTTP Basic Authentication.
 
-- **Default credentials** (if no environment variables are set):
-  - Username: `admin`
-  - Password: `123456`
-- **Environment variables** (take precedence over defaults):
+- By default, **Basic Auth is disabled**.
+- To enable Basic Auth, set both of the following environment variables:
   - `BASIC_AUTH_USER`
   - `BASIC_AUTH_PASSWORD`
 
-Example Docker run command overriding the default credentials:
+Example Docker run command enabling Basic Auth:
 
 ```shell
 docker container run \
