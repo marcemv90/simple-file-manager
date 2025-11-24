@@ -65,6 +65,33 @@ docker container run \
 
 That will leave the sfm.war file inside the ./out directory, in this folder.
 
+## Installation
+
+### Prerequisites
+
+- A Java application server (for example, Apache Tomcat or Oracle WebLogic).
+
+### Deploying Simple File Manager
+
+1. Obtain the `sfm.war` file (see the section above).
+2. Deploy `sfm.war` to your application server as you would with any other web application.
+3. Start or restart the application server so it picks up the new deployment.
+
+### Enabling Basic Auth in a Java app server
+
+If you want to enable HTTP Basic Authentication when running on a Java application server, make sure the following environment variables are available to the JVM:
+
+- `BASIC_AUTH_USER`
+- `BASIC_AUTH_PASSWORD`
+
+For example, on Tomcat you can export them in `setenv.sh` (or the equivalent startup script) before starting the server.
+
+## Tested application servers
+
+The following application servers have been tested successfully with Simple File Manager:
+
+- Apache Tomcat 10
+
 # Disclaimer
 
 Simple File Manager was developed by a monkey with a shotgun (me). I am not a developer, and this webapp was built with the help of an AI agent. As a result, nothing in this software should be assumed to follow proper engineering practices, security standards, or production-grade quality.
