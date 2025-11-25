@@ -5,6 +5,9 @@ on:
     types:
       - published
 
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     name: Build and publish sfm.war
@@ -40,5 +43,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/sfm.war
+          tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
