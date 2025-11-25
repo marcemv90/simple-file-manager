@@ -23,11 +23,21 @@ public class BasicAuthFilter implements Filter {
     }
 
     private static String initUsername() {
+        String propUser = System.getProperty("sfm_basic_auth_user");
+        if (propUser != null && !propUser.isEmpty()) {
+            return propUser;
+        }
+
         String envUser = System.getenv("BASIC_AUTH_USER");
         return (envUser == null || envUser.isEmpty()) ? null : envUser;
     }
 
     private static String initPassword() {
+        String propPass = System.getProperty("sfm_basic_auth_password");
+        if (propPass != null && !propPass.isEmpty()) {
+            return propPass;
+        }
+
         String envPass = System.getenv("BASIC_AUTH_PASSWORD");
         return (envPass == null || envPass.isEmpty()) ? null : envPass;
     }

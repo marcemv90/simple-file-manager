@@ -33,21 +33,3 @@ EXPOSE 8080
 
 # Start Tomcat
 CMD ["catalina.sh", "run"]
-
-FROM aquasec/trivy:0.56.1 AS trivy-scan
-
-WORKDIR /rootfs
-
-COPY --from=runtime / ./
-
-RUN trivy rootfs \
-      --severity HIGH,CRITICAL \
-      --exit-code 0 \
-      --format table \
-      /rootfs | tee /trivy-report.txt && touch /tmp/.trivy-scan-done
-
-FROM runtime
-
-COPY --from=trivy-scan /trivy-report.txt /tmp/trivy-report.txt
-COPY --from=trivy-scan /tmp/.trivy-scan-done /tmp/.trivy-scan-done
-RUN rm -f /tmp/.trivy-scan-done

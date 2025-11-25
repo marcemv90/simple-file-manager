@@ -32,11 +32,13 @@ Then open your browser at `http://localhost:9000/sfm`.
 Simple File Manager can be protected with HTTP Basic Authentication.
 
 - By default, **Basic Auth is disabled**.
-- To enable Basic Auth, set both of the following environment variables:
-  - `BASIC_AUTH_USER`
-  - `BASIC_AUTH_PASSWORD`
+- To enable Basic Auth, you must configure a username and password using either:
+  - Environment variables `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD`, or
+  - JVM system properties `sfm_basic_auth_user` and `sfm_basic_auth_password`.
+- If both environment variables and JVM properties are set, **JVM properties take precedence**.
+- If either the username or password is missing after this resolution, **Basic Auth remains disabled**.
 
-Example Docker run command enabling Basic Auth:
+Example Docker run command enabling Basic Auth via environment variables:
 
 ```shell
 docker container run \
@@ -79,12 +81,18 @@ That will leave the sfm.war file inside the ./out directory, in this folder.
 
 ### Enabling Basic Auth in a Java app server
 
-If you want to enable HTTP Basic Authentication when running on a Java application server, make sure the following environment variables are available to the JVM:
+If you want to enable HTTP Basic Authentication when running on a Java application server, configure the credentials using either:
 
-- `BASIC_AUTH_USER`
-- `BASIC_AUTH_PASSWORD`
+- Environment variables `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD`, or
+- JVM system properties `sfm_basic_auth_user` and `sfm_basic_auth_password`.
 
-For example, on Tomcat you can export them in `setenv.sh` (or the equivalent startup script) before starting the server.
+If both are set, **JVM system properties take precedence**. If either the username or password is missing after this resolution, **Basic Auth remains disabled**.
+
+For example, on Tomcat you can export the environment variables in `setenv.sh` (or the equivalent startup script) before starting the server, or pass the JVM properties:
+
+```shell
+JAVA_OPTS="${JAVA_OPTS} -Dsfm_basic_auth_user=myuser -Dsfm_basic_auth_password=mypassword"
+```
 
 ## Tested application servers
 

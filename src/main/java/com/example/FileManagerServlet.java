@@ -26,8 +26,6 @@ public class FileManagerServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String contextPath = request.getContextPath() + "/";
-
         // If the request is specifically for terminal.html, serve the static
         // terminal page directly from the webapp resources to avoid recursive
         // dispatch back into this servlet (which is mapped to "/").
@@ -76,12 +74,14 @@ public class FileManagerServlet extends HttpServlet {
         out.println("    <link href='https://fonts.googleapis.com/icon?family=Material+Icons' rel='stylesheet'>");
         out.println("    <!-- Materialize CSS -->");
         out.println("    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css'>");
-        out.println("    <!-- Custom CSS -->");
-        out.println("    <link rel='stylesheet' href='/css/style.css'>");
+        out.println("    <!-- Custom CSS (relative so it works behind reverse proxies) -->");
+        out.println("    <link rel='stylesheet' href='css/style.css'>");
         out.println("    <style>");
         out.println("        table.file-list-table { width: 100%; border-collapse: collapse; font-size: 12px; }");
         out.println("        table.file-list-table th, table.file-list-table td { padding: 2px 4px; line-height: 1.1; }");
         out.println("        table.file-list-table tr { height: 18px; }");
+        out.println("        .sfm-action-btn { min-height: 18px; line-height: 18px; height: 18px; padding: 0 8px; }");
+        out.println("        .sfm-action-btn i.material-icons { font-size: 16px; line-height: 18px; }");
         out.println("        table.file-list-table th.col-perms, table.file-list-table td.col-perms,");
         out.println("        table.file-list-table th.col-owner, table.file-list-table td.col-owner,");
         out.println("        table.file-list-table th.col-group, table.file-list-table td.col-group,");
@@ -96,7 +96,7 @@ public class FileManagerServlet extends HttpServlet {
         // Navigation Bar
         out.println("<nav class='light-blue darken-2'>");
         out.println("    <div class='nav-wrapper'>");
-        out.println("        <a href='" + contextPath + "/' class='brand-logo' style='padding-left: 20px;'>Simple File Manager</a>");
+        out.println("        <a href='?path=/' class='brand-logo' style='padding-left: 20px;'>Simple File Manager</a>");
         out.println("    </div>");
         out.println("</nav>");
         
@@ -106,7 +106,7 @@ public class FileManagerServlet extends HttpServlet {
         // Breadcrumb Navigation (no colored container, custom link colors)
         out.println("    <div style='margin: 10px 0;'>");
         out.println("        <div class='col s12'>");
-        out.println("            <a href='" + contextPath + "?path=/' class='breadcrumb' style='color: #000000;'>/</a>");
+        out.println("            <a href='?path=/' class='breadcrumb' style='color: #000000;'>/</a>");
         
         String[] parts = path.split("/");
         int lastIndex = -1;
@@ -121,7 +121,7 @@ public class FileManagerServlet extends HttpServlet {
             if (!parts[i].isEmpty()) {
                 currentPath.append("/").append(parts[i]);
                 String color = (i == lastIndex) ? "#1976d2" : "#000000";
-                out.println("            <a href='" + contextPath + "/?path=" + currentPath.toString() + "' class='breadcrumb' style='color: " + color + ";'>" + parts[i] + "</a>");
+                out.println("            <a href='?path=" + currentPath.toString() + "' class='breadcrumb' style='color: " + color + ";'>" + parts[i] + "</a>");
             }
         }
         
@@ -194,7 +194,7 @@ public class FileManagerServlet extends HttpServlet {
                 out.println("                        <td class='right-align col-size'>&nbsp;</td>");
                 out.println("                        <td class='col-modified'>&nbsp;</td>");
                 out.println("                        <td class='col-name'>");
-                out.println("                            <a href='" + contextPath + "?path=" + parentPath + "' class='truncate' title='Parent folder' style='color:#1976d2;'>.. (parent folder)</a>");
+                out.println("                            <a href='?path=" + parentPath + "' class='truncate' title='Parent folder' style='color:#1976d2;'>.. (parent folder)</a>");
                 out.println("                        </td>");
                 out.println("                        <td class='right-align col-actions'>");
                 out.println("                            <button class='btn waves-effect waves-light light-blue' style='visibility:hidden;' disabled>");
@@ -228,22 +228,22 @@ public class FileManagerServlet extends HttpServlet {
                 
                 out.println("                        <td class='col-name'>");
                 if (file.isDirectory()) {
-                    out.println("                            <a href='" + contextPath + "?path=" + file.getPath() + "' class='truncate' title='" + file.getName() + "' style='color:#1976d2;'>" + file.getName() + "</a>");
+                    out.println("                            <a href='?path=" + file.getPath() + "' class='truncate' title='" + file.getName() + "' style='color:#1976d2;'>" + file.getName() + "</a>");
                 } else {
-                    out.println("                            <a href='" + contextPath + "/view?file=" + file.getPath() + "' class='truncate' title='" + file.getName() + "' style='color:#000000;'>" + file.getName() + "</a>");
+                    out.println("                            <a href='view?file=" + file.getPath() + "' class='truncate' title='" + file.getName() + "' style='color:#000000;'>" + file.getName() + "</a>");
                 }
                 out.println("                        </td>");
                 
                 out.println("                        <td class='right-align col-actions'>");
                 String deleteType = file.isDirectory() ? "directory" : "file";
                 String dropdownId = "actions-" + rowIndex;
-                out.println("                            <a class='dropdown-trigger btn waves-effect waves-light light-blue' href='#!' data-target='" + dropdownId + "' title='Actions'>");
+                out.println("                            <a class='dropdown-trigger btn waves-effect waves-light light-blue sfm-action-btn' href='#!' data-target='" + dropdownId + "' title='Actions'>");
                 out.println("                                <i class='material-icons'>more_vert</i>");
                 out.println("                            </a>");
                 out.println("                            <ul id='" + dropdownId + "' class='dropdown-content'>");
                 if (!file.isDirectory()) {
-                    out.println("                                <li><a href='" + contextPath + "/view?file=" + file.getPath() + "'>View</a></li>");
-                    out.println("                                <li><a href='" + contextPath + "/download?file=" + file.getPath() + "'>Download</a></li>");
+                    out.println("                                <li><a href='view?file=" + file.getPath() + "'>View</a></li>");
+                    out.println("                                <li><a href='download?file=" + file.getPath() + "'>Download</a></li>");
                 }
                 out.println("                                <li><a href='#!' class='rename-action' data-path='" + file.getPath() + "'>Rename</a></li>");
                 out.println("                                <li><a href='#!' class='move-action' data-path='" + file.getPath() + "'>Move</a></li>");
@@ -401,8 +401,8 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        if (openTerminalBtn) {");
         out.println("            openTerminalBtn.addEventListener('click', function() {");
         out.println("                var currentPath = '" + path + "';");
-        out.println("                var baseUrl = '" + contextPath + "terminal.html';");
-        out.println("                var url = baseUrl + '?path=' + currentPath;");
+        out.println("                var baseUrl = 'terminal.html'; // relative, so it respects reverse proxies");
+        out.println("                var url = baseUrl + '?path=' + encodeURIComponent(currentPath);");
         out.println("                window.open(url, 'noopener,noreferrer,width=1000,height=700');");
         out.println("            });");
         out.println("        }");
