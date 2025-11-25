@@ -5,6 +5,16 @@ on:
     types:
       - published
       - edited
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release (e.g. v1.2.3)'
+        required: true
+        type: string
+      release_body:
+        description: 'Optional release description to use when manually triggering'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -13,6 +23,9 @@ jobs:
   build-and-release:
     name: Build and publish sfm.war
     runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.event.release.tag_name }}
+      RELEASE_BODY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_body || github.event.release.body }}
 
     steps:
       - name: Checkout repository
@@ -52,14 +65,12 @@ jobs:
         run: |
           printf "%s\n\n---\n\n## Trivy scan report for sfm.war\n\n" "${RELEASE_BODY}" > release-body.md
           cat trivy-report.md >> release-body.md
-        env:
-          RELEASE_BODY: ${{ github.event.release.body }}
 
       - name: Upload sfm.war to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/sfm.war
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ env.TAG_NAME }}
           body_path: release-body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
