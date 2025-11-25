@@ -39,10 +39,26 @@ jobs:
           mkdir -p dist
           cp target/*.war dist/sfm.war
 
+      - name: Scan sfm.war with Trivy
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'dist/sfm.war'
+          format: 'table'
+          output: 'trivy-report.md'
+
+      - name: Build release body with Trivy report
+        run: |
+          printf "%s\n\n---\n\n## Trivy scan report for sfm.war\n\n" "${RELEASE_BODY}" > release-body.md
+          cat trivy-report.md >> release-body.md
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
+
       - name: Upload sfm.war to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/sfm.war
           tag_name: ${{ github.event.release.tag_name }}
+          body_path: release-body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
