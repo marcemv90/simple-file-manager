@@ -1,9 +1,9 @@
 name: Release sfm.war
 
 on:
-  push:
-    tags:
-      - "*"
+  release:
+    types:
+      - published
 
 jobs:
   build-and-release:
@@ -36,7 +36,7 @@ jobs:
           mkdir -p dist
           cp target/*.war dist/sfm.war
 
-      - name: Create GitHub Release
+      - name: Upload sfm.war to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/sfm.war
