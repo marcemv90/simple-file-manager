@@ -63,8 +63,19 @@ jobs:
 
       - name: Build release body with Trivy report
         run: |
-          printf "%s\n\n---\n\n## Trivy scan report for sfm.war\n\n" "${RELEASE_BODY}" > release-body.md
-          cat trivy-report.md >> release-body.md
+          if grep -qi "No vulnerabilities" trivy-report.md || ! grep -qi "CVE" trivy-report.md; then
+            SUMMARY="No known CVEs found for this release at $(date -u '+%Y-%m-%d')"
+          else
+            SUMMARY=""
+          fi
+
+          {
+            printf "%s\n\n---\n\n## CVE Report\n\n" "${RELEASE_BODY}"
+            if [ -n "${SUMMARY}" ]; then
+              printf "%s\n\n" "${SUMMARY}"
+            fi
+            cat trivy-report.md
+          } > release-body.md
 
       - name: Upload sfm.war to GitHub Release
         uses: softprops/action-gh-release@v2
