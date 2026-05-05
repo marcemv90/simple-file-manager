@@ -17,6 +17,8 @@ import java.text.SimpleDateFormat;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.Comparator;
 
 
 @WebServlet("/")
@@ -53,6 +55,9 @@ public class FileManagerServlet extends HttpServlet {
 
         File dir = new File(path);
         File[] files = dir.listFiles();
+        if (files != null) {
+            Arrays.sort(files, Comparator.comparingLong(File::lastModified));
+        }
         String parentPath = "/";
         if (path != null && !path.isEmpty() && !"/".equals(path)) {
             File parentFile = dir.getParentFile();
@@ -89,6 +94,10 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        table.file-list-table th.col-actions, table.file-list-table td.col-actions { white-space: nowrap; }");
         out.println("        table.file-list-table th.col-modified, table.file-list-table td.col-modified { text-align: center; }");
         out.println("        table.file-list-table th.col-name, table.file-list-table td.col-name { width: 50%; }");
+        out.println("        table.file-list-table th.sortable { cursor: pointer; user-select: none; }");
+        out.println("        table.file-list-table th.sortable::after { content: '\\2195'; color: #ccc; font-size: 10px; margin-left: 4px; }");
+        out.println("        table.file-list-table th.sortable.sort-asc::after { content: '\\25B2'; color: #000; }");
+        out.println("        table.file-list-table th.sortable.sort-desc::after { content: '\\25BC'; color: #000; }");
         out.println("    </style>");
         out.println("</head>");
         out.println("<body>");
@@ -173,12 +182,12 @@ public class FileManagerServlet extends HttpServlet {
             out.println("            <table class='highlight responsive-table file-list-table'>");
             out.println("                <thead>");
             out.println("                    <tr>");
-            out.println("                        <th class='col-perms'>Permissions</th>");
-            out.println("                        <th class='col-owner'>Owner</th>");
-            out.println("                        <th class='col-group'>Group</th>");
-            out.println("                        <th class='right-align col-size'>Size</th>");
-            out.println("                        <th class='col-modified'>Modified</th>");
-            out.println("                        <th class='col-name'>Name</th>");
+            out.println("                        <th class='col-perms sortable' onclick='sortTable(0, \"string\")'>Permissions</th>");
+            out.println("                        <th class='col-owner sortable' onclick='sortTable(1, \"string\")'>Owner</th>");
+            out.println("                        <th class='col-group sortable' onclick='sortTable(2, \"string\")'>Group</th>");
+            out.println("                        <th class='right-align col-size sortable' onclick='sortTable(3, \"number\")'>Size</th>");
+            out.println("                        <th class='col-modified sortable sort-asc' onclick='sortTable(4, \"string\")'>Modified</th>");
+            out.println("                        <th class='col-name sortable' onclick='sortTable(5, \"string\")'>Name</th>");
             out.println("                        <th class='right-align col-actions'>Actions</th>");
             out.println("                    </tr>");
             out.println("                </thead>");
@@ -586,6 +595,54 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        });");
         out.println("    });");
         out.println("    ");
+        out.println("    function sortTable(n, type) {");
+        out.println("        var table = document.querySelector('.file-list-table');");
+        out.println("        if (!table) return;");
+        out.println("        var tbody = table.querySelector('tbody');");
+        out.println("        var rows = Array.from(tbody.querySelectorAll('tr'));");
+        out.println("        var parentRow = null;");
+        out.println("        if (rows.length > 0 && rows[0].querySelector('td.col-name a') && rows[0].querySelector('td.col-name a').textContent.includes('.. (parent folder)')) {");
+        out.println("            parentRow = rows.shift();");
+        out.println("        }");
+        out.println("        var th = table.querySelectorAll('thead th')[n];");
+        out.println("        var isAsc = th.classList.contains('sort-asc');");
+        out.println("        table.querySelectorAll('thead th').forEach(function(h) {");
+        out.println("            h.classList.remove('sort-asc', 'sort-desc');");
+        out.println("        });");
+        out.println("        var dir = isAsc ? 'desc' : 'asc';");
+        out.println("        if (dir === 'asc') {");
+        out.println("            th.classList.add('sort-asc');");
+        out.println("        } else {");
+        out.println("            th.classList.add('sort-desc');");
+        out.println("        }");
+        out.println("        rows.sort(function(a, b) {");
+        out.println("            var x = a.getElementsByTagName('TD')[n].textContent.trim();");
+        out.println("            var y = b.getElementsByTagName('TD')[n].textContent.trim();");
+        out.println("            var cmp = 0;");
+        out.println("            if (type === 'number') {");
+        out.println("                var numX = parseInt(x.replace(/\\\\D/g, ''), 10) || 0;");
+        out.println("                var numY = parseInt(y.replace(/\\\\D/g, ''), 10) || 0;");
+        out.println("                cmp = numX - numY;");
+        out.println("            } else {");
+        out.println("                cmp = x.localeCompare(y);");
+        out.println("            }");
+        out.println("            return dir === 'asc' ? cmp : -cmp;");
+        out.println("        });");
+        out.println("        tbody.innerHTML = '';");
+        out.println("        if (parentRow) {");
+        out.println("            tbody.appendChild(parentRow);");
+        out.println("        }");
+        out.println("        rows.forEach(function(row, index) {");
+        out.println("            var visualIndex = index + (parentRow ? 1 : 0);");
+        out.println("            if (visualIndex % 2 === 0) {");
+        out.println("                row.style.backgroundColor = '#f5f5f5';");
+        out.println("            } else {");
+        out.println("                row.style.backgroundColor = '';");
+        out.println("            }");
+        out.println("            tbody.appendChild(row);");
+        out.println("        });");
+        out.println("    }");
+        out.println("");
         out.println("    function formatFileSize(bytes) {");
         out.println("        if (isNaN(bytes)) return '0 Bytes';");
         out.println("        if (bytes === 0) return '0 Bytes';");
