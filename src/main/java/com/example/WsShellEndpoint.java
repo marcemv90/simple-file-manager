@@ -32,9 +32,15 @@ public class WsShellEndpoint {
     @OnOpen
     public void onOpen(Session session) {
         try {
-            // Start an interactive login bash so that readline, history, and
-            // completion are enabled just like in a normal terminal.
-            String[] cmd = { "/bin/bash", "-il" };
+            java.io.File rcFile = java.io.File.createTempFile(".sfm_bashrc_", ".sh");
+            String rcContent = "if [ -f ~/.bash_profile ]; then source ~/.bash_profile; elif [ -f ~/.profile ]; then source ~/.profile; fi\n" +
+                               "if [ -f ~/.bashrc ]; then source ~/.bashrc; fi\n" +
+                               "function get() { if [ -z \"$1\" ]; then echo 'Usage: get <file or folder>'; else echo -e \"\\033[36mDownloading $1...\\033[0m\"; echo -ne \"\\033]8888;DOWNLOAD;$PWD/$1\\007\"; fi; }\n" +
+                               "function put() { if [ \"$1\" == \"-d\" ]; then echo -ne \"\\033]8888;UPLOAD_DIR;$PWD\\007\"; elif [ -z \"$1\" ]; then echo -ne \"\\033]8888;UPLOAD;$PWD\\007\"; else echo 'Usage: put [-d] (Use -d to upload a whole directory)'; fi; }\n" +
+                               "rm -f " + rcFile.getAbsolutePath() + "\n";
+            java.nio.file.Files.write(rcFile.toPath(), rcContent.getBytes(StandardCharsets.UTF_8));
+
+            String[] cmd = { "/bin/bash", "--rcfile", rcFile.getAbsolutePath(), "-i" };
             Map<String, String> env = new HashMap<>(System.getenv());
             env.putIfAbsent("TERM", "xterm-256color");
             env.putIfAbsent("SHELL", "/bin/bash");

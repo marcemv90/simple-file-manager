@@ -149,6 +149,78 @@
                 sendResize(dims.cols, dims.rows);
             }
         });
+
+        // Register custom OSC handler for get/put commands
+        term.parser.registerOscHandler(8888, function(data) {
+            const parts = data.split(';');
+            if (parts.length >= 2) {
+                const command = parts[0];
+                const path = parts.slice(1).join(';');
+                
+                if (command === 'DOWNLOAD') {
+                    window.open(basePath + 'download?file=' + encodeURIComponent(path), '_blank');
+                } else if (command === 'UPLOAD' || command === 'UPLOAD_DIR') {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    if (command === 'UPLOAD_DIR') {
+                        input.setAttribute('webkitdirectory', '');
+                        input.setAttribute('directory', '');
+                    } else {
+                        input.multiple = true;
+                    }
+                    input.onchange = function(e) {
+                        const files = e.target.files;
+                        if (!files || files.length === 0) return;
+                        
+                        const formData = new FormData();
+                        let fileNames = [];
+                        for (let i = 0; i < files.length; i++) {
+                            formData.append('files', files[i]);
+                            fileNames.push(files[i].name);
+                        }
+                        formData.append('currentPath', path);
+                        
+                        if (command === 'UPLOAD' && files.length <= 15) {
+                            term.write('\r\n\x1b[33mUploading to ' + path + ':\x1b[0m\r\n');
+                            for (let i = 0; i < fileNames.length; i++) {
+                                term.write('  - ' + fileNames[i] + '\r\n');
+                            }
+                        } else {
+                            let dirName = '';
+                            if (command === 'UPLOAD_DIR' && files.length > 0) {
+                                const relPath = files[0].webkitRelativePath;
+                                if (relPath && relPath.indexOf('/') > 0) {
+                                    dirName = ' directory "' + relPath.split('/')[0] + '"';
+                                }
+                            }
+                            term.write('\r\n\x1b[33mUploading' + dirName + ' (' + files.length + ' file/s) to ' + path + '...\x1b[0m\r\n');
+                        }
+                        
+                        fetch(basePath + 'upload', {
+                            method: 'POST',
+                            body: formData
+                        }).then(function(res) { return res.json(); })
+                          .then(function(data) {
+                              if (data.status === 'success') {
+                                  term.write('\r\n\x1b[32mUpload complete.\x1b[0m\r\n');
+                                  if (socket.readyState === WebSocket.OPEN) socket.send('\r');
+                              } else if (data.status === 'exists') {
+                                  term.write('\r\n\x1b[31mFile already exists. Please delete it first or upload via UI to overwrite.\x1b[0m\r\n');
+                                  if (socket.readyState === WebSocket.OPEN) socket.send('\r');
+                              } else {
+                                  term.write('\r\n\x1b[31mUpload failed: ' + (data.message || 'Unknown error') + '\x1b[0m\r\n');
+                                  if (socket.readyState === WebSocket.OPEN) socket.send('\r');
+                              }
+                          }).catch(function(err) {
+                              term.write('\r\n\x1b[31mError during upload.\x1b[0m\r\n');
+                              if (socket.readyState === WebSocket.OPEN) socket.send('\r');
+                          });
+                    };
+                    input.click();
+                }
+            }
+            return true;
+        });
     })();
 </script>
 </body>

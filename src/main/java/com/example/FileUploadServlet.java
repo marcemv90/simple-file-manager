@@ -52,6 +52,13 @@ public class FileUploadServlet extends HttpServlet {
                     }
                     
                     File file = new File(uploadDir, fileName);
+                    
+                    // Create intermediate directories if they don't exist
+                    File parentDir = file.getParentFile();
+                    if (parentDir != null && !parentDir.exists()) {
+                        parentDir.mkdirs();
+                    }
+
                     if (file.exists() && !overwrite) {
                         // Signal to the client that the file already exists and confirmation is required
                         response.setStatus(HttpServletResponse.SC_CONFLICT);
@@ -88,13 +95,15 @@ public class FileUploadServlet extends HttpServlet {
         }
     }
     
-    // Helper method to get the submitted file name
     private String getSubmittedFileName(Part part) {
         for (String cd : part.getHeader("content-disposition").split(";")) {
             if (cd.trim().startsWith("filename")) {
                 String fileName = cd.substring(cd.indexOf('=') + 1).trim().replace("\"", "");
-                return fileName.substring(fileName.lastIndexOf('/') + 1)
-                             .substring(fileName.lastIndexOf('\\') + 1); // MSIE fix
+                // Prevent path traversal
+                if (fileName.contains("..")) return null;
+                // Strip absolute path prefixes if any (e.g., C:\ or /)
+                fileName = fileName.replaceAll("^([A-Za-z]:)?[/\\\\\\\\]+", "");
+                return fileName;
             }
         }
         return null;
