@@ -158,7 +158,12 @@
                 const path = parts.slice(1).join(';');
                 
                 if (command === 'DOWNLOAD') {
-                    window.open(basePath + 'download?file=' + encodeURIComponent(path), '_blank');
+                    const link = document.createElement('a');
+                    link.href = basePath + 'download?file=' + encodeURIComponent(path);
+                    link.download = '';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
                 } else if (command === 'UPLOAD' || command === 'UPLOAD_DIR') {
                     const input = document.createElement('input');
                     input.type = 'file';
@@ -180,21 +185,12 @@
                         }
                         formData.append('currentPath', path);
                         
-                        if (command === 'UPLOAD' && files.length <= 15) {
-                            term.write('\r\n\x1b[33mUploading to ' + path + ':\x1b[0m\r\n');
-                            for (let i = 0; i < fileNames.length; i++) {
-                                term.write('  - ' + fileNames[i] + '\r\n');
-                            }
-                        } else {
-                            let dirName = '';
-                            if (command === 'UPLOAD_DIR' && files.length > 0) {
-                                const relPath = files[0].webkitRelativePath;
-                                if (relPath && relPath.indexOf('/') > 0) {
-                                    dirName = ' directory "' + relPath.split('/')[0] + '"';
-                                }
-                            }
-                            term.write('\r\n\x1b[33mUploading' + dirName + ' (' + files.length + ' file/s) to ' + path + '...\x1b[0m\r\n');
+                        let outStr = '\r\n\x1b[33mUploading to ' + path + ':\x1b[0m\r\n';
+                        for (let i = 0; i < files.length; i++) {
+                            const displayPath = files[i].webkitRelativePath || files[i].name;
+                            outStr += '  - ' + displayPath + '\r\n';
                         }
+                        term.write(outStr);
                         
                         fetch(basePath + 'upload', {
                             method: 'POST',
@@ -218,6 +214,23 @@
                     };
                     input.click();
                 }
+            }
+            return true;
+        });
+
+        // Register OSC handler for directory changes
+        term.parser.registerOscHandler(8889, function(data) {
+            const parts = data.split(';');
+            if (parts.length >= 2 && parts[0] === 'CWD') {
+                const newCwd = parts.slice(1).join(';');
+                const url = new URL(window.location);
+                // Also support 'path' parameter if that's what was used
+                if (url.searchParams.has('path')) {
+                    url.searchParams.set('path', newCwd);
+                } else {
+                    url.searchParams.set('cwd', newCwd);
+                }
+                window.history.replaceState({}, '', url);
             }
             return true;
         });
