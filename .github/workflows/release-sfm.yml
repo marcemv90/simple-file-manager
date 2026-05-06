@@ -60,6 +60,7 @@ jobs:
           scan-ref: '.'
           format: 'table'
           output: 'trivy-report.txt'
+          severity: 'HIGH,CRITICAL'
 
       - name: Build release body with Trivy report
         run: |
