@@ -53,11 +53,21 @@ jobs:
           mkdir -p dist
           cp target/*.war dist/sfm.war
 
+      - name: Extract sfm.war for scanning
+        # Trivy's 'fs' scan-type only reads dependency manifests (pom.xml) and never
+        # unpacks compiled .jar files, so it can't see the actual bundled dependencies
+        # (WEB-INF/lib/*.jar) and always reports 0 vulnerabilities. 'rootfs' does unpack
+        # and identify jars, but only when pointed at a real filesystem directory - not
+        # the .war archive itself. So extract it first.
+        run: |
+          mkdir -p war-extracted
+          unzip -q dist/sfm.war -d war-extracted
+
       - name: Scan project with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
+          scan-type: 'rootfs'
+          scan-ref: 'war-extracted'
           format: 'table'
           output: 'trivy-report.txt'
           severity: 'HIGH,CRITICAL'
