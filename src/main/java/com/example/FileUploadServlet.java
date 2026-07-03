@@ -20,6 +20,60 @@ public class FileUploadServlet extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) 
             throws ServletException, IOException {
+        String checkOnlyParam = request.getParameter("checkOnly");
+        boolean checkOnly = checkOnlyParam != null && checkOnlyParam.equalsIgnoreCase("true");
+        if (checkOnly) {
+            String currentPath = request.getParameter("currentPath");
+            java.util.List<String> filenames = new java.util.ArrayList<>();
+            try {
+                for (Part part : request.getParts()) {
+                    if (part.getName().equals("currentPath") && (currentPath == null || currentPath.isEmpty())) {
+                        try (InputStream is = part.getInputStream()) {
+                            currentPath = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        }
+                    } else if (part.getName().equals("filenames")) {
+                        try (InputStream is = part.getInputStream()) {
+                            filenames.add(new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // ignore
+            }
+            if (currentPath == null || currentPath.isEmpty()) {
+                currentPath = "/tmp";
+            }
+
+            java.util.List<String> conflicts = new java.util.ArrayList<>();
+            File uploadDir = new File(currentPath);
+            for (String name : filenames) {
+                if (name == null || name.isEmpty()) continue;
+                File f = new File(uploadDir, name);
+                if (f.exists()) {
+                    conflicts.add(name);
+                }
+            }
+
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            PrintWriter out = response.getWriter();
+            if (!conflicts.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("{\"status\":\"exists\",\"message\":\"Some files already exist.\",\"conflicts\":[");
+                for (int i = 0; i < conflicts.size(); i++) {
+                    sb.append("\"").append(conflicts.get(i).replace("\"", "\\\"")).append("\"");
+                    if (i < conflicts.size() - 1) {
+                        sb.append(",");
+                    }
+                }
+                sb.append("]}");
+                out.write(sb.toString());
+            } else {
+                out.write("{\"status\":\"none\"}");
+            }
+            return;
+        }
+
         String currentPath = request.getParameter("currentPath");
         String overwriteParam = request.getParameter("overwrite");
         boolean overwrite = overwriteParam != null && overwriteParam.equalsIgnoreCase("true");

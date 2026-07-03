@@ -5,11 +5,11 @@
     <title>Web Terminal</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Materialize CSS (for basic button styling, optional) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <!-- Materialize CSS (for basic button styling, optional; bundled locally, no internet required) -->
+    <link rel="stylesheet" href="vendor/materialize/css/materialize.min.css">
 
-    <!-- xterm.js CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <!-- xterm.js CSS (bundled locally, no internet required) -->
+    <link rel="stylesheet" href="vendor/xterm/css/xterm.css" />
 
     <style>
         html, body {
@@ -46,9 +46,9 @@
 </div>
 
 <!-- Dependencies -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script src="vendor/materialize/js/materialize.min.js"></script>
+<script src="vendor/xterm/lib/xterm.js"></script>
+<script src="vendor/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
 
 <script>
     (function() {

@@ -27,27 +27,22 @@ public class FileManagerServlet extends HttpServlet {
     private static final String DEFAULT_DIR = "/tmp";
 
     @Override
+    public void init() throws ServletException {
+        System.setProperty("jdk.lang.Process.launchMechanism", "POSIX_SPAWN");
+    }
+
+    @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        // If the request is specifically for terminal.html, serve the static
-        // terminal page directly from the webapp resources to avoid recursive
-        // dispatch back into this servlet (which is mapped to "/").
-        String requestUri = request.getRequestURI();
-        if (requestUri != null && requestUri.endsWith("/terminal.html")) {
-            response.setContentType("text/html;charset=UTF-8");
-            try (java.io.InputStream in = getServletContext().getResourceAsStream("/terminal.html");
-                 java.io.OutputStream outStream = response.getOutputStream()) {
-                if (in == null) {
-                    response.sendError(HttpServletResponse.SC_NOT_FOUND);
-                    return;
-                }
-                byte[] buffer = new byte[4096];
-                int len;
-                while ((len = in.read(buffer)) != -1) {
-                    outStream.write(buffer, 0, len);
-                }
-                outStream.flush();
+        // This servlet is mapped to "/", which makes it the app's default servlet -
+        // that replaces the container's static file handling for this webapp. So any
+        // request for a static resource (terminal.html, css/*, script.js, vendor/*...)
+        // must be served explicitly here, or it would fall through to the dynamic
+        // directory listing below instead of returning the actual file.
+        String servletPath = request.getServletPath();
+        if (servletPath != null && !servletPath.isEmpty() && !"/".equals(servletPath)) {
+            if (serveStaticResourceIfExists(servletPath, response)) {
+                return;
             }
-            return;
         }
 
         String pathParam = request.getParameter("path");
@@ -75,10 +70,10 @@ public class FileManagerServlet extends HttpServlet {
         out.println("    <meta charset='UTF-8'>");
         out.println("    <meta name='viewport' content='width=device-width, initial-scale=1.0'>");
         out.println("    <title>Simple File Manager</title>");
-        out.println("    <!-- Material Icons -->");
-        out.println("    <link href='https://fonts.googleapis.com/icon?family=Material+Icons' rel='stylesheet'>");
-        out.println("    <!-- Materialize CSS -->");
-        out.println("    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css'>");
+        out.println("    <!-- Material Icons (bundled locally, no internet required) -->");
+        out.println("    <link href='vendor/material-icons/material-icons.css' rel='stylesheet'>");
+        out.println("    <!-- Materialize CSS (bundled locally, no internet required) -->");
+        out.println("    <link rel='stylesheet' href='vendor/materialize/css/materialize.min.css'>");
         out.println("    <!-- Custom CSS (relative so it works behind reverse proxies) -->");
         out.println("    <link rel='stylesheet' href='css/style.css'>");
         out.println("    <style>");
@@ -104,10 +99,36 @@ public class FileManagerServlet extends HttpServlet {
         
         // Navigation Bar
         out.println("<nav class='light-blue darken-2'>");
-        out.println("    <div class='nav-wrapper'>");
-        out.println("        <a href='?path=/' class='brand-logo' style='padding-left: 20px;'>Simple File Manager</a>");
+        out.println("    <div class='nav-wrapper' style='display: flex; justify-content: space-between; align-items: center; padding: 0 20px;'>");
+        out.println("        <a href='?path=/' class='brand-logo' style='position: static;'>Simple File Manager</a>");
+        out.println("        <ul class='right' style='margin: 0;'>");
+        out.println("            <li>");
+        out.println("                <a class='dropdown-trigger btn light-blue darken-4' href='#' data-target='favorites-dropdown' style='display: flex; align-items: center;'>");
+        out.println("                    <i class='material-icons left' style='margin-right: 8px;'>star</i>Favorites");
+        out.println("                </a>");
+        out.println("            </li>");
+        out.println("        </ul>");
         out.println("    </div>");
         out.println("</nav>");
+        
+        // Favorites Dropdown Menu Structure
+        out.println("<ul id='favorites-dropdown' class='dropdown-content' style='min-width: 250px;'>");
+        out.println("    <!-- Dynamic content loaded via JS -->");
+        out.println("</ul>");
+        
+        // Favorites Management Modal
+        out.println("<div id='favoritesModal' class='modal' style='max-width: 600px; border-radius: 8px;'>");
+        out.println("    <div class='modal-content'>");
+        out.println("        <h4 style='color: #0d47a1; margin-top: 0; font-weight: 500;'>Manage Favorites</h4>");
+        out.println("        <div id='favoritesListContainer'>");
+        out.println("            <!-- List of favorites rendered dynamically -->");
+        out.println("        </div>");
+        out.println("    </div>");
+        out.println("    <div class='modal-footer'>");
+        out.println("        <button class='modal-close btn-flat waves-effect'>Close</button>");
+        out.println("        <button id='addNewFavBtn' class='btn light-blue darken-2 waves-effect waves-light' style='margin-left: 10px;'>Add Custom Path</button>");
+        out.println("    </div>");
+        out.println("</div>");
         
         // Main Content (full-width container)
         out.println("<main style='width: 100%; max-width: 100%; padding: 0 12px; box-sizing: border-box;'>");
@@ -140,17 +161,20 @@ public class FileManagerServlet extends HttpServlet {
         // Upload Form (no card container to allow full width)
         out.println("    <div>");
         out.println("        <form id='uploadForm' action='upload' method='post' enctype='multipart/form-data' class='col s12'>");
-        out.println("            <div class='file-field input-field'>");
-        out.println("                <div class='btn light-blue darken-2'>");
-        out.println("                    <span>CHOOSE FILES TO UPLOAD</span>");
-        out.println("                    <input type='file' id='fileInput' name='file' multiple>");
-        out.println("                </div>");
-        out.println("                <div class='file-path-wrapper'>");
-        out.println("                    <input class='file-path validate' type='text' placeholder='Upload one or more files'>");
-        out.println("                </div>");
+        out.println("            <input type='file' id='fileInput' name='file' multiple style='display: none;'>");
+        out.println("            <div id='dropZone' class='card-panel' style='border: 2px dashed #1976d2; background-color: #f1f8fe; text-align: center; padding: 25px; margin: 15px 0; border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s;'>");
+        out.println("                <i class='material-icons' style='font-size: 48px; color: #1976d2; vertical-align: middle; margin-bottom: 8px;'>cloud_upload</i>");
+        out.println("                <h5 style='margin: 0; color: #0d47a1; font-weight: 500; font-size: 1.4rem;'>Drop files or folders here.</h5>");
+        out.println("                <p style='margin: 8px 0 0 0; color: #546e7a; font-size: 13px;'>Or click here to choose files</p>");
+        out.println("            </div>");
+        out.println("            <div style='margin-bottom: 15px;'>");
+        out.println("                <label>");
+        out.println("                    <input type='checkbox' id='directoryToggle' class='filled-in'>");
+        out.println("                    <span style='font-size: 14px; color: #37474f; font-weight: 500; user-select: none;'>Upload directories instead of files</span>");
+        out.println("                </label>");
         out.println("            </div>");
         out.println("            <input type='hidden' name='currentPath' value='" + path + "'>");
-        out.println("            <button type='submit' class='btn waves-effect waves-light light-blue darken-2'>");
+        out.println("            <button type='submit' class='btn waves-effect waves-light light-blue darken-2' disabled>");
         out.println("                <i class='material-icons left'>cloud_upload</i>Upload");
         out.println("            </button>");
         out.println("            <button type='button' id='newFolderBtn' class='btn waves-effect waves-light grey darken-1' style='margin-left: 10px;'>");
@@ -178,7 +202,10 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        <br/>");
         out.println("        <br/>");
 
-        if (files != null && files.length > 0) {
+        boolean atRoot = (path == null || path.isEmpty() || "/".equals(path));
+        boolean hasFiles = files != null && files.length > 0;
+
+        if (hasFiles || !atRoot) {
             out.println("            <table class='highlight responsive-table file-list-table'>");
             out.println("                <thead>");
             out.println("                    <tr>");
@@ -194,7 +221,7 @@ public class FileManagerServlet extends HttpServlet {
             out.println("                <tbody>");
             int rowIndex = 0;
             // If not at root, insert a first row that goes to the parent folder ("..")
-            if (!(path == null || path.isEmpty() || "/".equals(path))) {
+            if (!atRoot) {
                 String parentRowStyle = (rowIndex % 2 == 0) ? " style='background-color: #f5f5f5;'" : "";
                 out.println("                    <tr" + parentRowStyle + ">");
                 out.println("                        <td class='col-perms'>&nbsp;</td>");
@@ -214,15 +241,22 @@ public class FileManagerServlet extends HttpServlet {
                 rowIndex++;
             }
 
-            for (File file : files) {
+            if (!hasFiles) {
+                out.println("                    <tr>");
+                out.println("                        <td colspan='7' style='text-align:center; color:#757575; padding: 12px 0;'>This folder is empty</td>");
+                out.println("                    </tr>");
+            }
+
+            for (File file : (files != null ? files : new File[0])) {
                 Path filePath = file.toPath();
-                BasicFileAttributes attrs = Files.readAttributes(filePath, BasicFileAttributes.class);
-                Set<PosixFilePermission> permissionsSet = Files.getPosixFilePermissions(filePath);
+                BasicFileAttributes attrs = Files.readAttributes(filePath, BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                Set<PosixFilePermission> permissionsSet = Files.getPosixFilePermissions(filePath, java.nio.file.LinkOption.NOFOLLOW_LINKS);
                 String permsBits = convertPermissionsToUnixStyle(permissionsSet);
-                char typeChar = file.isDirectory() ? 'd' : '-';
+                boolean isSymlink = Files.isSymbolicLink(filePath);
+                char typeChar = isSymlink ? 'l' : (file.isDirectory() ? 'd' : '-');
                 String permissions = typeChar + permsBits;
-                UserPrincipal owner = Files.getOwner(filePath);
-                String group = Files.readAttributes(filePath, PosixFileAttributes.class).group().getName();
+                UserPrincipal owner = Files.getOwner(filePath, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                String group = Files.readAttributes(filePath, PosixFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS).group().getName();
                 long size = attrs.size();
                 FileTime lastModifiedTime = attrs.lastModifiedTime();
                 String formattedDate = sdf.format(lastModifiedTime.toMillis());
@@ -275,21 +309,19 @@ public class FileManagerServlet extends HttpServlet {
         out.println("    </div>");
         
         out.println("</main>");
+        out.println("    <div id='dragOverlay' style='display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(25, 118, 210, 0.92); z-index: 9999; box-sizing: border-box; padding: 30px; pointer-events: none; align-items: center; justify-content: center; transition: opacity 0.3s ease;'>");
+        out.println("        <div style='border: 4px dashed #ffffff; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 16px;'>");
+        out.println("            <i class='material-icons' style='font-size: 100px; color: #ffffff; margin-bottom: 20px;'>cloud_upload</i>");
+        out.println("            <h3 style='margin: 0; color: #ffffff; font-weight: 500; text-align: center;'>Drop files or folders here.</h3>");
+        out.println("        </div>");
+        out.println("    </div>");
         
         // JavaScript
-        out.println("<script src='https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js'></script>");
-        out.println("<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>");
+        out.println("<script src='vendor/materialize/js/materialize.min.js'></script>");
+        out.println("<script src='vendor/sweetalert2/sweetalert2.all.min.js'></script>");
         out.println("<script>");
-        out.println("    // Helper to start upload, with optional overwrite");
-        out.println("    function startUpload(overwrite) {");
-        out.println("        var fileInput = document.getElementById('fileInput');");
-        out.println("        if (!fileInput || fileInput.files.length === 0) return;");
-        out.println("        var formData = new FormData();");
-        out.println("        for (var i = 0; i < fileInput.files.length; i++) {");
-        out.println("            formData.append('files', fileInput.files[i]);");
-        out.println("        }");
-        out.println("        formData.append('currentPath', '" + path + "');");
-        out.println("        formData.append('overwrite', overwrite ? 'true' : 'false');");
+        out.println("    // Unified helper to perform upload with progress");
+        out.println("    function performUpload(formData) {");
         out.println("        var xhr = new XMLHttpRequest();");
         out.println("        xhr.open('POST', 'upload', true);");
         out.println("        var progressBar = document.getElementById('progressBar');");
@@ -306,26 +338,11 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        xhr.onreadystatechange = function() {");
         out.println("            if (xhr.readyState === XMLHttpRequest.DONE) {");
         out.println("                if (progressContainer) { progressContainer.style.display = 'none'; }");
+        out.println("                var fileInput = document.getElementById('fileInput');");
+        out.println("                var uploadBtn = document.querySelector('#uploadForm button[type=\"submit\"]');");
         out.println("                try {");
         out.println("                    var response = JSON.parse(xhr.responseText || '{}');");
-        out.println("                    if (response.status === 'exists' && !overwrite) {");
-        out.println("                        Swal.fire({");
-        out.println("                            title: 'File already exists',");
-        out.println("                            text: (response.message || 'A file with the same name already exists.') + ' Do you want to overwrite it?',");
-        out.println("                            icon: 'warning',");
-        out.println("                            showCancelButton: true,");
-        out.println("                            confirmButtonText: 'Yes, overwrite',");
-        out.println("                            cancelButtonText: 'Cancel'");
-        out.println("                        }).then(function(result) {");
-        out.println("                            if (result.isConfirmed) {");
-        out.println("                                startUpload(true);");
-        out.println("                            } else {");
-        out.println("                                M.toast({html: 'Upload cancelled.', classes: 'yellow darken-2'});");
-        out.println("                            }");
-        out.println("                        });");
-        out.println("                    } else if (response.status === 'success') {");
-        out.println("                        // Clear file input so the same files are not uploaded again by accident");
-        out.println("                        var fileInput = document.getElementById('fileInput');");
+        out.println("                    if (response.status === 'success') {");
         out.println("                        if (fileInput) {");
         out.println("                            fileInput.value = '';");
         out.println("                            var changeEvent = new Event('change');");
@@ -338,14 +355,204 @@ public class FileManagerServlet extends HttpServlet {
         out.println("                        M.toast({html: 'Files uploaded successfully!', classes: 'green'});");
         out.println("                        setTimeout(function() { window.location.reload(); }, 1000);");
         out.println("                    } else {");
+        out.println("                        if (uploadBtn && fileInput && fileInput.files.length > 0) {");
+        out.println("                            uploadBtn.disabled = false;");
+        out.println("                        }");
         out.println("                        M.toast({html: 'Error: ' + (response.message || 'Unknown error'), classes: 'red'});");
         out.println("                    }");
         out.println("                } catch (e) {");
+        out.println("                    if (uploadBtn && fileInput && fileInput.files.length > 0) {");
+        out.println("                        uploadBtn.disabled = false;");
+        out.println("                    }");
         out.println("                    M.toast({html: 'Error uploading files', classes: 'red'});");
         out.println("                }");
         out.println("            }");
         out.println("        };");
         out.println("        xhr.send(formData);");
+        out.println("    }");
+        out.println("    ");
+        out.println("    // Helper to check file existence before upload");
+        out.println("    function checkFilesExist(filenames, currentPath, callback) {");
+        out.println("        var xhr = new XMLHttpRequest();");
+        out.println("        xhr.open('POST', 'upload?checkOnly=true', true);");
+        out.println("        var checkFormData = new FormData();");
+        out.println("        checkFormData.append('currentPath', currentPath);");
+        out.println("        for (var i = 0; i < filenames.length; i++) {");
+        out.println("            checkFormData.append('filenames', filenames[i]);");
+        out.println("        }");
+        out.println("        xhr.onreadystatechange = function() {");
+        out.println("            if (xhr.readyState === XMLHttpRequest.DONE) {");
+        out.println("                try {");
+        out.println("                    var response = JSON.parse(xhr.responseText || '{}');");
+        out.println("                    callback(response);");
+        out.println("                } catch (e) {");
+        out.println("                    callback({status: 'error', message: 'Failed to parse existence check response'});");
+        out.println("                }");
+        out.println("            }");
+        out.println("        };");
+        out.println("        xhr.send(checkFormData);");
+        out.println("    }");
+        out.println("    ");
+        out.println("    // Helper to start standard input upload");
+        out.println("    function startUpload(overwrite) {");
+        out.println("        var fileInput = document.getElementById('fileInput');");
+        out.println("        if (!fileInput || fileInput.files.length === 0) return;");
+        out.println("        var filenames = [];");
+        out.println("        for (var i = 0; i < fileInput.files.length; i++) {");
+        out.println("            var file = fileInput.files[i];");
+        out.println("            var relativePath = file.webkitRelativePath || file.name;");
+        out.println("            filenames.push(relativePath);");
+        out.println("        }");
+        out.println("        ");
+        out.println("        var uploadBtn = document.querySelector('#uploadForm button[type=\"submit\"]');");
+        out.println("        if (uploadBtn) { uploadBtn.disabled = true; }");
+        out.println("        ");
+        out.println("        checkFilesExist(filenames, '" + path + "', function(response) {");
+        out.println("            if (response.status === 'exists') {");
+        out.println("                if (uploadBtn) { uploadBtn.disabled = false; }");
+        out.println("                Swal.fire({");
+        out.println("                    title: 'File already exists',");
+        out.println("                    text: (response.message || 'A file with the same name already exists.') + ' Do you want to overwrite it?',");
+        out.println("                    icon: 'warning',");
+        out.println("                    showCancelButton: true,");
+        out.println("                    confirmButtonText: 'Yes, overwrite',");
+        out.println("                    cancelButtonText: 'Cancel'");
+        out.println("                }).then(function(result) {");
+        out.println("                    if (result.isConfirmed) {");
+        out.println("                        doActualUpload(fileInput.files, false, true);");
+        out.println("                    } else {");
+        out.println("                        if (fileInput) {");
+        out.println("                            fileInput.value = '';");
+        out.println("                            var changeEvent = new Event('change');");
+        out.println("                            fileInput.dispatchEvent(changeEvent);");
+        out.println("                        }");
+        out.println("                        var filePathInput = document.querySelector('.file-path');");
+        out.println("                        if (filePathInput) {");
+        out.println("                            filePathInput.value = '';");
+        out.println("                        }");
+        out.println("                        M.toast({html: 'Upload cancelled.', classes: 'yellow darken-2'});");
+        out.println("                    }");
+        out.println("                });");
+        out.println("            } else {");
+        out.println("                doActualUpload(fileInput.files, false, false);");
+        out.println("            }");
+        out.println("        });");
+        out.println("    }");
+        out.println("    ");
+        out.println("    // Helper to start drag & drop files/folders upload");
+        out.println("    function uploadDroppedFiles(filesToUpload, overwrite) {");
+        out.println("        var filenames = [];");
+        out.println("        for (var i = 0; i < filesToUpload.length; i++) {");
+        out.println("            filenames.push(filesToUpload[i].relativePath);");
+        out.println("        }");
+        out.println("        ");
+        out.println("        var uploadBtn = document.querySelector('#uploadForm button[type=\"submit\"]');");
+        out.println("        if (uploadBtn) { uploadBtn.disabled = true; }");
+        out.println("        ");
+        out.println("        checkFilesExist(filenames, '" + path + "', function(response) {");
+        out.println("            if (response.status === 'exists') {");
+        out.println("                if (uploadBtn) { uploadBtn.disabled = false; }");
+        out.println("                Swal.fire({");
+        out.println("                    title: 'File already exists',");
+        out.println("                    text: (response.message || 'A file with the same name already exists.') + ' Do you want to overwrite it?',");
+        out.println("                    icon: 'warning',");
+        out.println("                    showCancelButton: true,");
+        out.println("                    confirmButtonText: 'Yes, overwrite',");
+        out.println("                    cancelButtonText: 'Cancel'");
+        out.println("                }).then(function(result) {");
+        out.println("                    if (result.isConfirmed) {");
+        out.println("                        doActualUpload(filesToUpload, true, true);");
+        out.println("                    } else {");
+        out.println("                        M.toast({html: 'Upload cancelled.', classes: 'yellow darken-2'});");
+        out.println("                    }");
+        out.println("                });");
+        out.println("            } else {");
+        out.println("                doActualUpload(filesToUpload, true, false);");
+        out.println("            }");
+        out.println("        });");
+        out.println("    }");
+        out.println("    ");
+        out.println("    // Realise actual upload once confirmed or no conflicts exist");
+        out.println("    function doActualUpload(filesList, isDropped, overwrite) {");
+        out.println("        var formData = new FormData();");
+        out.println("        for (var i = 0; i < filesList.length; i++) {");
+        out.println("            if (isDropped) {");
+        out.println("                formData.append('files', filesList[i].file, filesList[i].relativePath);");
+        out.println("            } else {");
+        out.println("                var file = filesList[i];");
+        out.println("                var relativePath = file.webkitRelativePath || file.name;");
+        out.println("                formData.append('files', file, relativePath);");
+        out.println("            }");
+        out.println("        }");
+        out.println("        formData.append('currentPath', '" + path + "');");
+        out.println("        formData.append('overwrite', overwrite ? 'true' : 'false');");
+        out.println("        performUpload(formData);");
+        out.println("    }");
+        out.println("    ");
+        out.println("    // Handle dropped files/folders recursively");
+        out.println("    async function handleDroppedItems(items) {");
+        out.println("        var filesToUpload = [];");
+        out.println("        var promises = [];");
+        out.println("        ");
+        out.println("        async function traverseFileTree(item, currentPath) {");
+        out.println("            currentPath = currentPath || '';");
+        out.println("            if (item.isFile) {");
+        out.println("                await new Promise(function(resolve) {");
+        out.println("                    item.file(resolve);");
+        out.println("                }).then(function(file) {");
+        out.println("                    filesToUpload.push({");
+        out.println("                        file: file,");
+        out.println("                        relativePath: currentPath + file.name");
+        out.println("                    });");
+        out.println("                });");
+        out.println("            } else if (item.isDirectory) {");
+        out.println("                var dirReader = item.createReader();");
+        out.println("                var entries = await readAllEntries(dirReader);");
+        out.println("                for (var i = 0; i < entries.length; i++) {");
+        out.println("                    await traverseFileTree(entries[i], currentPath + item.name + '/');");
+        out.println("                }");
+        out.println("            }");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function readAllEntries(dirReader) {");
+        out.println("            return new Promise(function(resolve, reject) {");
+        out.println("                var allEntries = [];");
+        out.println("                function readNext() {");
+        out.println("                    dirReader.readEntries(function(entries) {");
+        out.println("                        if (entries.length === 0) {");
+        out.println("                            resolve(allEntries);");
+        out.println("                        } else {");
+        out.println("                            allEntries.push.apply(allEntries, entries);");
+        out.println("                            readNext();");
+        out.println("                        }");
+        out.println("                    }, reject);");
+        out.println("                }");
+        out.println("                readNext();");
+        out.println("            });");
+        out.println("        }");
+        out.println("        ");
+        out.println("        for (var i = 0; i < items.length; i++) {");
+        out.println("            var item = items[i];");
+        out.println("            if (item.webkitGetAsEntry) {");
+        out.println("                var entry = item.webkitGetAsEntry();");
+        out.println("                if (entry) {");
+        out.println("                    promises.push(traverseFileTree(entry));");
+        out.println("                }");
+        out.println("            } else {");
+        out.println("                var file = item.getAsFile();");
+        out.println("                if (file) {");
+        out.println("                    filesToUpload.push({");
+        out.println("                        file: file,");
+        out.println("                        relativePath: file.name");
+        out.println("                    });");
+        out.println("                }");
+        out.println("            }");
+        out.println("        }");
+        out.println("        ");
+        out.println("        await Promise.all(promises);");
+        out.println("        if (filesToUpload.length > 0) {");
+        out.println("            uploadDroppedFiles(filesToUpload, false);");
+        out.println("        }");
         out.println("    }");
         out.println("    ");
         out.println("    // Initialize Materialize components");
@@ -387,10 +594,18 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        var uploadButton = uploadForm ? uploadForm.querySelector('button[type=\\'submit\\']') : null;");
         out.println("        function updateUploadButtonState() {");
         out.println("            if (!uploadButton) return;");
+        out.println("            var dropZoneSubtext = document.querySelector('#dropZone p');");
+        out.println("            var directoryToggle = document.getElementById('directoryToggle');");
         out.println("            if (!fileInput || fileInput.files.length === 0) {");
         out.println("                uploadButton.disabled = true;");
+        out.println("                if (dropZoneSubtext) {");
+        out.println("                    dropZoneSubtext.textContent = (directoryToggle && directoryToggle.checked) ? 'Or click here to choose folders' : 'Or click here to choose files';");
+        out.println("                }");
         out.println("            } else {");
         out.println("                uploadButton.disabled = false;");
+        out.println("                if (dropZoneSubtext) {");
+        out.println("                    dropZoneSubtext.textContent = fileInput.files.length + ' item(s) selected';");
+        out.println("                }");
         out.println("            }");
         out.println("        }");
         out.println("        updateUploadButtonState();");
@@ -405,6 +620,98 @@ public class FileManagerServlet extends HttpServlet {
         out.println("                startUpload(false);");
         out.println("            });");
         out.println("        }");
+        out.println("        ");
+        out.println("        // Handle directoryToggle behavior");
+        out.println("        var directoryToggle = document.getElementById('directoryToggle');");
+        out.println("        var fileInputBtnText = document.querySelector('#uploadForm .btn span');");
+        out.println("        var filePathInput = document.querySelector('#uploadForm .file-path');");
+        out.println("        var dropZoneSubtext = document.querySelector('#dropZone p');");
+        out.println("        function updateInputMode() {");
+        out.println("            if (!fileInput) return;");
+        out.println("            fileInput.value = '';");
+        out.println("            var changeEvent = new Event('change');");
+        out.println("            fileInput.dispatchEvent(changeEvent);");
+        out.println("            if (filePathInput) { filePathInput.value = ''; }");
+        out.println("            if (directoryToggle && directoryToggle.checked) {");
+        out.println("                fileInput.setAttribute('webkitdirectory', '');");
+        out.println("                fileInput.setAttribute('directory', '');");
+        out.println("                if (fileInputBtnText) { fileInputBtnText.textContent = 'CHOOSE FOLDERS'; }");
+        out.println("                if (filePathInput) { filePathInput.placeholder = 'Upload one or more folders'; }");
+        out.println("                if (dropZoneSubtext) { dropZoneSubtext.textContent = 'Or click here to choose folders'; }");
+        out.println("            } else {");
+        out.println("                fileInput.removeAttribute('webkitdirectory');");
+        out.println("                fileInput.removeAttribute('directory');");
+        out.println("                if (fileInputBtnText) { fileInputBtnText.textContent = 'CHOOSE FILES'; }");
+        out.println("                if (filePathInput) { filePathInput.placeholder = 'Upload one or more files'; }");
+        out.println("                if (dropZoneSubtext) { dropZoneSubtext.textContent = 'Or click here to choose files'; }");
+        out.println("            }");
+        out.println("        }");
+        out.println("        if (directoryToggle) {");
+        out.println("            directoryToggle.addEventListener('change', updateInputMode);");
+        out.println("        }");
+        out.println("        updateInputMode();");
+        out.println("        // Handle dropZone clicks");
+        out.println("        var dropZone = document.getElementById('dropZone');");
+        out.println("        if (dropZone) {");
+        out.println("            dropZone.addEventListener('click', function() {");
+        out.println("                if (fileInput) { fileInput.click(); }");
+        out.println("            });");
+        out.println("            dropZone.addEventListener('dragenter', function(e) {");
+        out.println("                e.preventDefault();");
+        out.println("                dropZone.style.backgroundColor = '#e1f5fe';");
+        out.println("                dropZone.style.borderColor = '#0288d1';");
+        out.println("            });");
+        out.println("            dropZone.addEventListener('dragover', function(e) {");
+        out.println("                e.preventDefault();");
+        out.println("                dropZone.style.backgroundColor = '#e1f5fe';");
+        out.println("                dropZone.style.borderColor = '#0288d1';");
+        out.println("            });");
+        out.println("            dropZone.addEventListener('dragleave', function(e) {");
+        out.println("                e.preventDefault();");
+        out.println("                dropZone.style.backgroundColor = '#f1f8fe';");
+        out.println("                dropZone.style.borderColor = '#1976d2';");
+        out.println("            });");
+        out.println("            dropZone.addEventListener('drop', function(e) {");
+        out.println("                e.preventDefault();");
+        out.println("                dropZone.style.backgroundColor = '#f1f8fe';");
+        out.println("                dropZone.style.borderColor = '#1976d2';");
+        out.println("            });");
+        out.println("        }");
+        out.println("        ");
+        out.println("        // Full screen Drag and Drop window listeners");
+        out.println("        var dragCounter = 0;");
+        out.println("        var dragOverlay = document.getElementById('dragOverlay');");
+        out.println("        ");
+        out.println("        window.addEventListener('dragenter', function(e) {");
+        out.println("            e.preventDefault();");
+        out.println("            dragCounter++;");
+        out.println("            if (dragCounter === 1 && dragOverlay) {");
+        out.println("                dragOverlay.style.display = 'flex';");
+        out.println("            }");
+        out.println("        });");
+        out.println("        ");
+        out.println("        window.addEventListener('dragover', function(e) {");
+        out.println("            e.preventDefault();");
+        out.println("        });");
+        out.println("        ");
+        out.println("        window.addEventListener('dragleave', function(e) {");
+        out.println("            e.preventDefault();");
+        out.println("            dragCounter--;");
+        out.println("            if (dragCounter === 0 && dragOverlay) {");
+        out.println("                dragOverlay.style.display = 'none';");
+        out.println("            }");
+        out.println("        });");
+        out.println("        ");
+        out.println("        window.addEventListener('drop', function(e) {");
+        out.println("            e.preventDefault();");
+        out.println("            dragCounter = 0;");
+        out.println("            if (dragOverlay) {");
+        out.println("                dragOverlay.style.display = 'none';");
+        out.println("            }");
+        out.println("            if (e.dataTransfer && e.dataTransfer.items) {");
+        out.println("                handleDroppedItems(e.dataTransfer.items);");
+        out.println("            }");
+        out.println("        });");
         out.println("        // Handle \"Open Terminal\" button (xterm.js web terminal in new window, same directory)");
         out.println("        var openTerminalBtn = document.getElementById('openTerminalBtn');");
         out.println("        if (openTerminalBtn) {");
@@ -593,6 +900,283 @@ public class FileManagerServlet extends HttpServlet {
         out.println("                });");
         out.println("            }");
         out.println("        });");
+        out.println("        ");
+        out.println("        // Favorites Feature JavaScript");
+        out.println("        var favoritesKey = 'sfm_favorites';");
+        out.println("        ");
+        out.println("        function getFavorites() {");
+        out.println("            var favsStr = localStorage.getItem(favoritesKey);");
+        out.println("            if (!favsStr) return [];");
+        out.println("            try {");
+        out.println("                return JSON.parse(favsStr);");
+        out.println("            } catch(e) {");
+        out.println("                return [];");
+        out.println("            }");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function saveFavorites(favs) {");
+        out.println("            localStorage.setItem(favoritesKey, JSON.stringify(favs));");
+        out.println("            renderFavorites();");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function renderFavorites() {");
+        out.println("            var favs = getFavorites();");
+        out.println("            var dropdown = document.getElementById('favorites-dropdown');");
+        out.println("            if (!dropdown) return;");
+        out.println("            ");
+        out.println("            dropdown.innerHTML = '';");
+        out.println("            ");
+        out.println("            if (favs.length === 0) {");
+        out.println("                var liEmpty = document.createElement('li');");
+        out.println("                liEmpty.innerHTML = '<a href=\"#!\" class=\"grey-text\" style=\"pointer-events: none; font-style: italic;\">No favorites saved</a>';");
+        out.println("                dropdown.appendChild(liEmpty);");
+        out.println("            } else {");
+        out.println("                favs.forEach(function(fav, index) {");
+        out.println("                    var li = document.createElement('li');");
+        out.println("                    var a = document.createElement('a');");
+        out.println("                    a.href = '?path=' + encodeURIComponent(fav.path);");
+        out.println("                    a.textContent = fav.alias;");
+        out.println("                    a.title = fav.path;");
+        out.println("                    a.style.color = '#0288d1';");
+        out.println("                    li.appendChild(a);");
+        out.println("                    dropdown.appendChild(li);");
+        out.println("                });");
+        out.println("            }");
+        out.println("            ");
+        out.println("            // Add actions divider");
+        out.println("            var liDivider = document.createElement('li');");
+        out.println("            liDivider.className = 'divider';");
+        out.println("            liDivider.setAttribute('tabindex', '-1');");
+        out.println("            dropdown.appendChild(liDivider);");
+        out.println("            ");
+        out.println("            // Add \"Add current to favorites\"");
+        out.println("            var liAddCurrent = document.createElement('li');");
+        out.println("            liAddCurrent.innerHTML = '<a href=\"#!\" id=\"addCurrentFavBtn\"><i class=\"material-icons left\" style=\"margin-right:8px; color:#1976d2;\">star_border</i>Add current path</a>';");
+        out.println("            dropdown.appendChild(liAddCurrent);");
+        out.println("            ");
+        out.println("            // Add \"Manage favorites...\"");
+        out.println("            var liManage = document.createElement('li');");
+        out.println("            liManage.innerHTML = '<a href=\"#!\" id=\"manageFavsBtn\"><i class=\"material-icons left\" style=\"margin-right:8px; color:#1976d2;\">settings</i>Manage...</a>';");
+        out.println("            dropdown.appendChild(liManage);");
+        out.println("            ");
+        out.println("            // Bind actions");
+        out.println("            document.getElementById('addCurrentFavBtn').addEventListener('click', function(e) {");
+        out.println("                e.preventDefault();");
+        out.println("                addCurrentDirectoryToFavorites();");
+        out.println("            });");
+        out.println("            document.getElementById('manageFavsBtn').addEventListener('click', function(e) {");
+        out.println("                e.preventDefault();");
+        out.println("                openManageFavoritesModal();");
+        out.println("            });");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function addCurrentDirectoryToFavorites() {");
+        out.println("            var currentPath = '" + path + "';");
+        out.println("            var defaultAlias = currentPath.split('/').pop() || 'Root';");
+        out.println("            ");
+        out.println("            Swal.fire({");
+        out.println("                title: 'Add current path to favorites',");
+        out.println("                html: '<div style=\"text-align:left; margin-bottom:10px;\"><label>Alias</label></div>' +");
+        out.println("                      '<input id=\"swal-alias\" class=\"swal2-input\" value=\"' + defaultAlias + '\" style=\"margin-top:0; margin-bottom:20px;\">' +");
+        out.println("                      '<div style=\"text-align:left; margin-bottom:10px;\"><label>Path</label></div>' +");
+        out.println("                      '<input id=\"swal-path\" class=\"swal2-input\" value=\"' + currentPath + '\" readonly style=\"margin-top:0;\">',");
+        out.println("                showCancelButton: true,");
+        out.println("                confirmButtonText: 'Add',");
+        out.println("                preConfirm: function() {");
+        out.println("                    return {");
+        out.println("                        alias: document.getElementById('swal-alias').value.trim(),");
+        out.println("                        path: document.getElementById('swal-path').value.trim()");
+        out.println("                    };");
+        out.println("                }");
+        out.println("            }).then(function(result) {");
+        out.println("                if (result.isConfirmed) {");
+        out.println("                    var alias = result.value.alias;");
+        out.println("                    var pathVal = result.value.path;");
+        out.println("                    if (!alias) {");
+        out.println("                        M.toast({html: 'Alias cannot be empty.', classes: 'red'});");
+        out.println("                        return;");
+        out.println("                    }");
+        out.println("                    var favs = getFavorites();");
+        out.println("                    favs.push({ alias: alias, path: pathVal });");
+        out.println("                    saveFavorites(favs);");
+        out.println("                    M.toast({html: 'Added to favorites!', classes: 'green'});");
+        out.println("                }");
+        out.println("            });");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function openManageFavoritesModal() {");
+        out.println("            var modal = document.getElementById('favoritesModal');");
+        out.println("            if (!modal) return;");
+        out.println("            ");
+        out.println("            renderManageModalList();");
+        out.println("            ");
+        out.println("            var instance = M.Modal.getInstance(modal);");
+        out.println("            if (instance) {");
+        out.println("                instance.open();");
+        out.println("            }");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function renderManageModalList() {");
+        out.println("            var container = document.getElementById('favoritesListContainer');");
+        out.println("            if (!container) return;");
+        out.println("            ");
+        out.println("            var favs = getFavorites();");
+        out.println("            container.innerHTML = '';");
+        out.println("            ");
+        out.println("            if (favs.length === 0) {");
+        out.println("                container.innerHTML = '<p class=\"grey-text center-align\" style=\"font-style: italic; padding: 20px 0;\">No favorites saved yet.</p>';");
+        out.println("                return;");
+        out.println("            }");
+        out.println("            ");
+        out.println("            var table = document.createElement('table');");
+        out.println("            table.className = 'highlight';");
+        out.println("            table.innerHTML = '<thead><tr><th>Alias</th><th>Path</th><th class=\"right-align\" style=\"width: 100px;\">Actions</th></tr></thead><tbody></tbody>';");
+        out.println("            var tbody = table.querySelector('tbody');");
+        out.println("            ");
+        out.println("            favs.forEach(function(fav, index) {");
+        out.println("                var tr = document.createElement('tr');");
+        out.println("                ");
+        out.println("                var tdAlias = document.createElement('td');");
+        out.println("                tdAlias.style.fontWeight = '500';");
+        out.println("                tdAlias.textContent = fav.alias;");
+        out.println("                ");
+        out.println("                var tdPath = document.createElement('td');");
+        out.println("                tdPath.className = 'grey-text';");
+        out.println("                tdPath.style.fontSize = '12px';");
+        out.println("                tdPath.textContent = fav.path;");
+        out.println("                ");
+        out.println("                var tdActions = document.createElement('td');");
+        out.println("                tdActions.className = 'right-align';");
+        out.println("                ");
+        out.println("                var editBtn = document.createElement('a');");
+        out.println("                editBtn.href = \"#!\";");
+        out.println("                editBtn.className = 'btn-flat waves-effect';");
+        out.println("                editBtn.style.padding = '0 8px';");
+        out.println("                editBtn.innerHTML = \"<i class=\\\"material-icons\\\" style=\\\"color: #fbc02d; font-size: 20px;\\\">edit</i>\";");
+        out.println("                editBtn.addEventListener('click', function(e) {");
+        out.println("                    e.preventDefault();");
+        out.println("                    editFavoriteItem(index);");
+        out.println("                });");
+        out.println("                ");
+        out.println("                var deleteBtn = document.createElement('a');");
+        out.println("                deleteBtn.href = \"#!\";");
+        out.println("                deleteBtn.className = 'btn-flat waves-effect';");
+        out.println("                deleteBtn.style.padding = '0 8px';");
+        out.println("                deleteBtn.innerHTML = \"<i class=\\\"material-icons\\\" style=\\\"color: #d32f2f; font-size: 20px;\\\">delete</i>\";");
+        out.println("                deleteBtn.addEventListener('click', function(e) {");
+        out.println("                    e.preventDefault();");
+        out.println("                    deleteFavoriteItem(index);");
+        out.println("                });");
+        out.println("                ");
+        out.println("                tdActions.appendChild(editBtn);");
+        out.println("                tdActions.appendChild(deleteBtn);");
+        out.println("                ");
+        out.println("                tr.appendChild(tdAlias);");
+        out.println("                tr.appendChild(tdPath);");
+        out.println("                tr.appendChild(tdActions);");
+        out.println("                ");
+        out.println("                tbody.appendChild(tr);");
+        out.println("            });");
+        out.println("            ");
+        out.println("            container.appendChild(table);");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function editFavoriteItem(index) {");
+        out.println("            var favs = getFavorites();");
+        out.println("            var fav = favs[index];");
+        out.println("            if (!fav) return;");
+        out.println("            ");
+        out.println("            Swal.fire({");
+        out.println("                title: 'Edit favorite',");
+        out.println("                html: '<div style=\"text-align:left; margin-bottom:10px;\"><label>Alias</label></div>' +");
+        out.println("                      '<input id=\"swal-edit-alias\" class=\"swal2-input\" value=\"' + fav.alias + '\" style=\"margin-top:0; margin-bottom:20px;\">' +");
+        out.println("                      '<div style=\"text-align:left; margin-bottom:10px;\"><label>Path</label></div>' +");
+        out.println("                      '<input id=\"swal-edit-path\" class=\"swal2-input\" value=\"' + fav.path + '\" style=\"margin-top:0;\">',");
+        out.println("                showCancelButton: true,");
+        out.println("                confirmButtonText: 'Save',");
+        out.println("                preConfirm: function() {");
+        out.println("                    return {");
+        out.println("                        alias: document.getElementById('swal-edit-alias').value.trim(),");
+        out.println("                        path: document.getElementById('swal-edit-path').value.trim()");
+        out.println("                    };");
+        out.println("                }");
+        out.println("            }).then(function(result) {");
+        out.println("                if (result.isConfirmed) {");
+        out.println("                    var alias = result.value.alias;");
+        out.println("                    var pathVal = result.value.path;");
+        out.println("                    if (!alias || !pathVal) {");
+        out.println("                        M.toast({html: 'Alias and path cannot be empty.', classes: 'red'});");
+        out.println("                        return;");
+        out.println("                    }");
+        out.println("                    favs[index] = { alias: alias, path: pathVal };");
+        out.println("                    saveFavorites(favs);");
+        out.println("                    renderManageModalList();");
+        out.println("                    M.toast({html: 'Favorite updated!', classes: 'green'});");
+        out.println("                }");
+        out.println("            });");
+        out.println("        }");
+        out.println("        ");
+        out.println("        function deleteFavoriteItem(index) {");
+        out.println("            var favs = getFavorites();");
+        out.println("            var fav = favs[index];");
+        out.println("            if (!fav) return;");
+        out.println("            ");
+        out.println("            Swal.fire({");
+        out.println("                title: 'Are you sure?',");
+        out.println("                text: 'Do you want to delete favorite \"' + fav.alias + '\"?',");
+        out.println("                icon: 'warning',");
+        out.println("                showCancelButton: true,");
+        out.println("                confirmButtonText: 'Yes, delete',");
+        out.println("                cancelButtonText: 'Cancel'");
+        out.println("            }).then(function(result) {");
+        out.println("                if (result.isConfirmed) {");
+        out.println("                    favs.splice(index, 1);");
+        out.println("                    saveFavorites(favs);");
+        out.println("                    renderManageModalList();");
+        out.println("                    M.toast({html: 'Favorite deleted.', classes: 'yellow darken-2'});");
+        out.println("                }");
+        out.println("            });");
+        out.println("        }");
+        out.println("        ");
+        out.println("        // Add custom path click handler in modal");
+        out.println("        var addNewFavBtn = document.getElementById('addNewFavBtn');");
+        out.println("        if (addNewFavBtn) {");
+        out.println("            addNewFavBtn.addEventListener('click', function(e) {");
+        out.println("                e.preventDefault();");
+        out.println("                Swal.fire({");
+        out.println("                    title: 'Add custom favorite',");
+        out.println("                    html: '<div style=\"text-align:left; margin-bottom:10px;\"><label>Alias</label></div>' +");
+        out.println("                          '<input id=\"swal-new-alias\" class=\"swal2-input\" placeholder=\"e.g. Logs\" style=\"margin-top:0; margin-bottom:20px;\">' +");
+        out.println("                          '<div style=\"text-align:left; margin-bottom:10px;\"><label>Path</label></div>' +");
+        out.println("                          '<input id=\"swal-new-path\" class=\"swal2-input\" placeholder=\"e.g. /var/log\" style=\"margin-top:0;\">',");
+        out.println("                    showCancelButton: true,");
+        out.println("                    confirmButtonText: 'Add',");
+        out.println("                    preConfirm: function() {");
+        out.println("                        return {");
+        out.println("                            alias: document.getElementById('swal-new-alias').value.trim(),");
+        out.println("                            path: document.getElementById('swal-new-path').value.trim()");
+        out.println("                        };");
+        out.println("                    }");
+        out.println("                }).then(function(result) {");
+        out.println("                    if (result.isConfirmed) {");
+        out.println("                        var alias = result.value.alias;");
+        out.println("                        var pathVal = result.value.path;");
+        out.println("                        if (!alias || !pathVal) {");
+        out.println("                            M.toast({html: 'Alias and path cannot be empty.', classes: 'red'});");
+        out.println("                            return;");
+        out.println("                        }");
+        out.println("                        var favs = getFavorites();");
+        out.println("                        favs.push({ alias: alias, path: pathVal });");
+        out.println("                        saveFavorites(favs);");
+        out.println("                        renderManageModalList();");
+        out.println("                        M.toast({html: 'Favorite added!', classes: 'green'});");
+        out.println("                    }");
+        out.println("                });");
+        out.println("            });");
+        out.println("        }");
+        out.println("        ");
+        out.println("        // Initial favorites rendering");
+        out.println("        renderFavorites();");
         out.println("    });");
         out.println("    ");
         out.println("    function sortTable(n, type) {");
@@ -603,6 +1187,10 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        var parentRow = null;");
         out.println("        if (rows.length > 0 && rows[0].querySelector('td.col-name a') && rows[0].querySelector('td.col-name a').textContent.includes('.. (parent folder)')) {");
         out.println("            parentRow = rows.shift();");
+        out.println("        }");
+        out.println("        var emptyRow = null;");
+        out.println("        if (rows.length > 0 && rows[0].getElementsByTagName('TD').length === 1) {");
+        out.println("            emptyRow = rows.shift();");
         out.println("        }");
         out.println("        var th = table.querySelectorAll('thead th')[n];");
         out.println("        var isAsc = th.classList.contains('sort-asc');");
@@ -632,6 +1220,9 @@ public class FileManagerServlet extends HttpServlet {
         out.println("        if (parentRow) {");
         out.println("            tbody.appendChild(parentRow);");
         out.println("        }");
+        out.println("        if (emptyRow) {");
+        out.println("            tbody.appendChild(emptyRow);");
+        out.println("        }");
         out.println("        rows.forEach(function(row, index) {");
         out.println("            var visualIndex = index + (parentRow ? 1 : 0);");
         out.println("            if (visualIndex % 2 === 0) {");
@@ -654,6 +1245,45 @@ public class FileManagerServlet extends HttpServlet {
         out.println("</script>");
         out.println("</body>");
         out.println("</html>");
+    }
+
+    // Serves a bundled static resource (css/js/fonts/html under webapp) directly from the
+    // war, bypassing the dynamic directory listing. Returns false if no such resource exists,
+    // so the caller can fall back to the normal listing behavior.
+    private boolean serveStaticResourceIfExists(String resourcePath, HttpServletResponse response) throws IOException {
+        try (java.io.InputStream in = getServletContext().getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                return false;
+            }
+            String contentType = getServletContext().getMimeType(resourcePath);
+            if (contentType == null) {
+                contentType = guessMimeType(resourcePath);
+            }
+            response.setContentType(contentType);
+            try (java.io.OutputStream outStream = response.getOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int len;
+                while ((len = in.read(buffer)) != -1) {
+                    outStream.write(buffer, 0, len);
+                }
+                outStream.flush();
+            }
+            return true;
+        }
+    }
+
+    // Fallback MIME type guesses in case the servlet container has no mime-mapping
+    // configured for these extensions.
+    private String guessMimeType(String resourcePath) {
+        String lower = resourcePath.toLowerCase();
+        if (lower.endsWith(".css")) return "text/css";
+        if (lower.endsWith(".js")) return "application/javascript";
+        if (lower.endsWith(".html")) return "text/html;charset=UTF-8";
+        if (lower.endsWith(".woff2")) return "font/woff2";
+        if (lower.endsWith(".woff")) return "font/woff";
+        if (lower.endsWith(".ttf")) return "font/ttf";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        return "application/octet-stream";
     }
 
     // Method to convert Set<PosixFilePermission> to Unix-style permission string (rwx bits only)
